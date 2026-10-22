@@ -36,3 +36,8 @@ An active package is catalog metadata only. No checkout, recurring charges, paym
 
 ### v0.3.0B — Customer package browsing and selections
 Customers can browse active HomeServer, optional subdomain hosting, and fully hosted Cloud packages at /plans.php. Signed-in users can record a package selection in their dashboard. Repeated selections are idempotent; inactive packages cannot be newly selected; user-specific selections are only returned for the authenticated account. Package selections do not create purchases, subscriptions, entitlements, provisioning or download access. Existing v0.3.0A installations can apply the idempotent package schema upgrade from the owner package page.
+
+### v0.3.0C1 — Stripe foundation
+Owner Admin → Integrations accepts a Stripe secret API key (sk_test_ / sk_live_) and a distinct webhook signing secret (whsec_), both encrypted at rest and never displayed after saving. Existing installations must click **Enable Stripe event storage**; fresh installations get the table automatically.
+
+Register the HTTPS snapshot webhook endpoint `https://YOUR-DOMAIN/stripe_webhook.php` in Stripe Workbench for the event types documented in `stripe_allowed_event_types()`. The endpoint verifies the raw-body HMAC, a five-minute timestamp tolerance, account test/live mode, event shape, and event type. Repeated event IDs increment a delivery counter but do not duplicate records. Events are stored as **pending**, not processed. No Stripe Checkout call, financial transaction, subscription activation, license, or download occurs in C1. Complete C2/C3 and live Stripe sandbox acceptance before enabling money movement.

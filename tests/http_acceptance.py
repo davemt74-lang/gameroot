@@ -1,5 +1,5 @@
 """End-to-end smoke against a localhost PHP web server and isolated CI MySQL."""
-import os, re, sys, http.cookiejar, urllib.request, urllib.parse, urllib.error
+import os, re, sys, json, hmac, time, hashlib, http.cookiejar, urllib.request, urllib.parse, urllib.error
 BASE = os.environ.get('TEST_BASE_URL','http://127.0.0.1:8188')
 cookies=http.cookiejar.CookieJar(); browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
 def request(path, data=None):
@@ -8,6 +8,12 @@ def request(path, data=None):
         with browser.open(urllib.request.Request(BASE+path,data=body),timeout=14) as response:
             return response.status,response.url,response.read().decode('utf-8','replace'),dict(response.headers)
     except urllib.error.HTTPError as exc:return exc.code,exc.url,exc.read().decode('utf-8','replace'),dict(exc.headers)
+def raw_post(path, body, headers):
+    req=urllib.request.Request(BASE+path,data=body.encode('utf-8'),headers=headers,method='POST')
+    try:
+        with browser.open(req,timeout=14) as response:
+            return response.status,response.read().decode('utf-8','replace')
+    except urllib.error.HTTPError as exc:return exc.code,exc.read().decode('utf-8','replace')
 def token(html):
     match=re.search(r'name="csrf"\s+value="([a-f0-9]{64})"',html)
     if not match:raise AssertionError('Missing CSRF input')
@@ -29,6 +35,25 @@ check(status==200 and 'Configured' in content and key not in content,'Saved inte
 request('/admin.php?tab=integrations',{'csrf':token(content),'action':'save_provider','provider':'openai','credential':'','revoke':'1'})
 status,url,content,h=request('/admin.php?tab=integrations')
 check(status==200 and content.count('Not configured')>=2,'Key revocation works')
+status,url,content,h=request('/admin.php?tab=integrations')
+stripe_key='sk_test_ciOnlySecret1234567890'
+stripe_whsec='whsec_ciOnlySigningSecret1234567890'
+request('/admin.php?tab=integrations',{'csrf':token(content),'action':'save_provider','provider':'stripe_api','credential':stripe_key})
+status,url,content,h=request('/admin.php?tab=integrations')
+request('/admin.php?tab=integrations',{'csrf':token(content),'action':'save_provider','provider':'stripe_webhook','credential':stripe_whsec})
+status,url,content,h=request('/admin.php?tab=integrations')
+check(stripe_key not in content and stripe_whsec not in content and 'Stripe' in content,'Stripe secrets remain masked')
+if 'Enable Stripe event storage' in content:
+    request('/admin.php?tab=integrations',{'csrf':token(content),'action':'upgrade_stripe'})
+payload=json.dumps({'id':'evt_HTTPTEST123456','type':'checkout.session.completed','livemode':False,'data':{'object':{'id':'cs_test_HTTP123456'}}},separators=(',',':'))
+stamp=str(int(time.time()))
+valid_hmac=hmac.new(stripe_whsec.encode(),(stamp+'.'+payload).encode(),hashlib.sha256).hexdigest()
+code,body=raw_post('/stripe_webhook.php',payload,{'Content-Type':'application/json','Stripe-Signature':'t='+stamp+',v1='+('0'*64)})
+check(code==400,'Unsigned or tampered Stripe webhook rejected')
+code,body=raw_post('/stripe_webhook.php',payload,{'Content-Type':'application/json','Stripe-Signature':'t='+stamp+',v1='+valid_hmac})
+check(code==200 and 'true' in body,'Signed Stripe webhook accepted')
+code,body=raw_post('/stripe_webhook.php',payload,{'Content-Type':'application/json','Stripe-Signature':'t='+stamp+',v1='+valid_hmac})
+check(code==200,'Duplicate Stripe delivery accepted idempotently')
 status,url,content,h=request('/packages.php')
 check(status==200 and 'Create package' in content,'Owner package builder loads')
 new_plan={'csrf':token(content),'action':'create_package','sku':'homeserver-http-ci','name':'HomeServer HTTP Test',

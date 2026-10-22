@@ -48,3 +48,15 @@ assert "select_customer_package" in plans and "customer_package_selections" in a
 assert "No payment" in plans and "No charge" not in plans or "No payment" in plans
 assert "customer_package_selections" in (root/'app/schema.sql').read_text()
 assert "customer_package_selections" in packages
+
+stripe=(root/'app/stripe.php').read_text()
+stripe_webhook=(root/'public/stripe_webhook.php').read_text()
+assert "hash_hmac('sha256'" in stripe and "hash_equals" in stripe
+assert "300" in stripe and "262144" in stripe
+assert "ON DUPLICATE KEY UPDATE deliveries" in stripe
+assert "state VARCHAR(20) NOT NULL DEFAULT 'pending'" in (root/'app/schema.sql').read_text()
+assert "portal_require_https()" in stripe_webhook and "stripe_verify_signature" in stripe_webhook
+assert "verify_csrf()" not in stripe_webhook and "session_start" not in stripe_webhook
+assert "stripe_api" in (root/'app/portal.php').read_text()
+assert "stripe_webhook" in (root/'app/portal.php').read_text()
+assert "sk_live_" in stripe_webhook and "sk_test_" in stripe_webhook

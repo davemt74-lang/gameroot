@@ -74,6 +74,8 @@ function integration_providers(): array {
         'hostgator' => ['label'=>'HostGator / cPanel','hint'=>'Account-level cPanel API token. Provisioning remains disabled until connection and SSL certification.'],
         'openai' => ['label'=>'OpenAI','hint'=>'OpenAI API key for future server-side portal AI features.'],
         'anthropic' => ['label'=>'Claude (Anthropic)','hint'=>'Anthropic API key for future server-side Claude features.'],
+        'stripe_api' => ['label'=>'Stripe secret API key','hint'=>'Server-side sk_test_ or sk_live_ key. No checkout is enabled in this release.'],
+        'stripe_webhook' => ['label'=>'Stripe webhook signing secret','hint'=>'whsec_ secret for the GameRoot webhook endpoint. Separate from the API key.'],
     ];
 }
 function integration_statuses(): array {
@@ -85,6 +87,8 @@ function save_integration(string $provider, string $key, string $host='', string
     if($revoke){$q=$pdo->prepare('DELETE FROM integrations WHERE provider=?');$q->execute([$provider]);return;}
     if($key==='')return; // An empty field is never interpreted as exposing or replacing a saved key.
     if(strlen($key)>8192 || strlen($key)<12)throw new DomainException('Invalid credential length.');
+    if($provider==='stripe_api' && !preg_match('/^sk_(?:test|live)_[a-zA-Z0-9]{8,}$/D',$key))throw new DomainException('Use a valid Stripe secret API key.');
+    if($provider==='stripe_webhook' && !preg_match('/^whsec_[a-zA-Z0-9]{8,}$/D',$key))throw new DomainException('Use a valid Stripe webhook signing secret.');
     $meta=[];
     if($provider==='hostgator'){
         $host=strtolower(trim($host));$username=trim($username);

@@ -69,3 +69,15 @@ CREATE TABLE IF NOT EXISTS customer_package_selections (
  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
  INDEX selection_user (user_id, selected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+ event_id VARCHAR(190) NOT NULL PRIMARY KEY,
+ event_type VARCHAR(100) NOT NULL,
+ object_id VARCHAR(190) NOT NULL,
+ live_mode TINYINT(1) NOT NULL,
+ state VARCHAR(20) NOT NULL DEFAULT 'pending',
+ deliveries INT UNSIGNED NOT NULL DEFAULT 1,
+ received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+ INDEX stripe_pending (state, received_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
