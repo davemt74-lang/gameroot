@@ -87,3 +87,28 @@ function list_packages(PDO $pdo,bool $activeOnly=false): array {
     if($activeOnly) $sql.=' WHERE p.active=1';
     return $pdo->query($sql.' ORDER BY p.id DESC')->fetchAll();
 }
+
+function update_package(PDO $pdo,int $id,array $input): void {
+    if ($id<1) throw new DomainException('Invalid package.');
+    $v=validate_package($input);
+    $pdo->beginTransaction();
+    try {
+        $q=$pdo->prepare('SELECT p.id,d.delivery_type,d.billing_type FROM products p INNER JOIN package_details d ON d.product_id=p.id WHERE p.id=? FOR UPDATE');
+        $q->execute([$id]);$old=$q->fetch();
+        if (!$old) throw new DomainException('Package not found.');
+        $q=$pdo->prepare('SELECT (SELECT COUNT(*) FROM orders WHERE product_id=?) + (SELECT COUNT(*) FROM entitlements WHERE product_id=?)');
+        $q->execute([$id,$id]);
+        if ((int)$q->fetchColumn()>0 && ($old['delivery_type']!==$v['delivery_type'] || $old['billing_type']!==$v['billing_type'])) {
+            throw new DomainException('Delivery and ownership model cannot change after purchase. Create a new package instead.');
+        }
+        $q=$pdo->prepare('UPDATE products SET sku=?,name=?,description=?,price_cents=? WHERE id=?');
+        $q->execute([$v['sku'],$v['name'],$v['description'],$v['price_cents'],$id]);
+        $q=$pdo->prepare('UPDATE package_details SET delivery_type=?,billing_type=?,billing_interval=?,features_json=? WHERE product_id=?');
+        $q->execute([$v['delivery_type'],$v['billing_type'],$v['billing_interval'],json_encode($v['features'],JSON_THROW_ON_ERROR),$id]);
+        $pdo->commit();
+    } catch(Throwable $e) {
+        if($pdo->inTransaction()) $pdo->rollBack();
+        if($e instanceof PDOException && $e->getCode()==='23000') throw new DomainException('That package SKU is already used.');
+        throw $e;
+    }
+}
