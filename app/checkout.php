@@ -30,7 +30,7 @@ function stripe_checkout_url(string $url): bool {
  $parts=parse_url($url);
  return is_array($parts) && strtolower((string)($parts['scheme']??''))==='https'
      && strtolower((string)($parts['host']??''))==='checkout.stripe.com'
-     && !isset($parts['user'],$parts['pass']) && !isset($parts['port'])
+     && !isset($parts['user']) && !isset($parts['pass']) && !isset($parts['port'])
      && str_starts_with((string)($parts['path']??''),'/c/');
 }
 function checkout_site_origin(): string {
@@ -78,25 +78,25 @@ function start_homeserver_checkout(PDO $pdo,int $userId,int $productId,?callable
    throw new DomainException('This package is not available for one-time checkout.');
   $q=$pdo->prepare('SELECT id FROM entitlements WHERE user_id=? AND product_id=?');
   $q->execute([$userId,$productId]);if($q->fetchColumn())throw new DomainException('This HomeServer package is already owned.');
-  $q=$pdo->prepare("SELECT a.order_id,a.state,a.checkout_url,o.total_cents FROM stripe_checkout_attempts a INNER JOIN orders o ON o.id=a.order_id WHERE a.user_id=? AND a.product_id=? AND a.expires_at>NOW() AND a.state IN ('creating','ready','failed') ORDER BY a.id DESC LIMIT 1 FOR UPDATE");
+  $q=$pdo->prepare("SELECT a.order_id,a.state,a.checkout_url,a.expires_at,o.total_cents FROM stripe_checkout_attempts a INNER JOIN orders o ON o.id=a.order_id WHERE a.user_id=? AND a.product_id=? AND a.expires_at>NOW() AND a.state IN ('creating','ready','failed') ORDER BY a.id DESC LIMIT 1 FOR UPDATE");
   $q->execute([$userId,$productId]);$attempt=$q->fetch();
   if($attempt && $attempt['state']==='ready' && is_string($attempt['checkout_url']) && stripe_checkout_url($attempt['checkout_url'])) {
    $pdo->commit();return $attempt['checkout_url'];
   }
   if($attempt){
-   $orderId=(int)$attempt['order_id'];$cents=(int)$attempt['total_cents'];
+   $orderId=(int)$attempt['order_id'];$cents=(int)$attempt['total_cents'];$sessionExpiry=strtotime((string)$attempt['expires_at']);
    $q=$pdo->prepare("UPDATE stripe_checkout_attempts SET state='creating' WHERE order_id=?");$q->execute([$orderId]);
   } else {
-   $cents=(int)$product['price_cents'];
+   $cents=(int)$product['price_cents'];$sessionExpiry=time()+3600;
    $q=$pdo->prepare("INSERT INTO orders(user_id,product_id,status,total_cents) VALUES (?,?,'pending',?)");
    $q->execute([$userId,$productId,$cents]);$orderId=(int)$pdo->lastInsertId();
-   $q=$pdo->prepare("INSERT INTO stripe_checkout_attempts(order_id,user_id,product_id,idempotency_key,state,expires_at) VALUES (?,?,?,?,'creating',DATE_ADD(NOW(),INTERVAL 1 HOUR))");
-   $q->execute([$orderId,$userId,$productId,'gameroot-order-'.$orderId]);
+   $q=$pdo->prepare("INSERT INTO stripe_checkout_attempts(order_id,user_id,product_id,idempotency_key,state,expires_at) VALUES (?,?,?,?,'creating',FROM_UNIXTIME(?))");
+   $q->execute([$orderId,$userId,$productId,'gameroot-order-'.$orderId,$sessionExpiry]);
   }
   $pdo->commit();
  } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
  $params=[
-  'mode'=>'payment','client_reference_id'=>(string)$orderId,'customer_email'=>(string)$user['email'],
+  'mode'=>'payment','expires_at'=>$sessionExpiry,'client_reference_id'=>(string)$orderId,'customer_email'=>(string)$user['email'],
   'line_items'=>[['price_data'=>['currency'=>'usd','unit_amount'=>$cents,'product_data'=>['name'=>$product['name']]],'quantity'=>1]],
   'metadata'=>['order_id'=>(string)$orderId,'user_id'=>(string)$userId],
   'success_url'=>$origin.'/account.php?checkout=returned','cancel_url'=>$origin.'/account.php?checkout=canceled'
