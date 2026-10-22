@@ -60,6 +60,9 @@ request('/plans.php',{'csrf':token(content),'action':'select_package','package_i
 status,url,content,h=request('/account.php')
 check(content.count('HomeServer HTTP Test')==1,'Duplicate selection does not create duplicate account entries')
 check('Packages awaiting checkout' in content and 'Checkout coming soon' in content,'Selection never grants download or checkout access')
+request('/account.php',{'csrf':token(content),'action':'remove_package_selection','package_id':plan_id})
+status,url,content,h=request('/account.php')
+check('No packages selected' in content,'Customer can remove selected package')
 
 status,url,content,h=request('/account.php')
 request('/account.php',{'csrf':token(content),'action':'request_installation','project_name':'Friday Fun','slug':'friday-fun'})
