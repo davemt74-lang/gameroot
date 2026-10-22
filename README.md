@@ -28,3 +28,8 @@ Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). **Set the root domain document ro
 
 ### v0.2.0A — cPanel verification
 After saving the cPanel hostname, account username and API token in Owner Admin → Integrations, select **Test cPanel connection**. GameRoot makes a read-only authenticated UAPI call over validated HTTPS port 2083. DNS results must be public IP addresses and are pinned for the request; redirects and invalid TLS certificates are rejected. Tokens and response bodies are never shown in the UI. Ensure PHP cURL is installed and your host permits outbound connections to port 2083. A successful check confirms API authentication only; it does not imply rights to provision subdomains, DNS, databases or SSL.
+
+### v0.3.0A — Package catalog
+The owner can visit **Admin → Package builder** to create, edit, activate, and disable draft packages. Package choices enforce one-time HomeServer ownership, optional recurring subdomain hosting, and recurring fully hosted Cloud plans. Prices are stored as integer USD cents and product SKUs are unique. Existing installations see an explicit owner-only, CSRF-protected and idempotent database upgrade before using the builder.
+
+An active package is catalog metadata only. No checkout, recurring charges, payment credentials, license issuance, downloads, or hosting provisioning occur in v0.3.0A. Subsequent sections must independently certify each fulfillment step. Existing entitlements remain untouched; products with orders or entitlements cannot change their delivery/ownership model.
