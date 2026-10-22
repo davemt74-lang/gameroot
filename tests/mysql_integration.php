@@ -41,10 +41,21 @@ $userId=(int)$pdo->lastInsertId();
 select_customer_package($pdo,$userId,$id);
 select_customer_package($pdo,$userId,$id);
 assert_test(count(customer_package_selections($pdo,$userId))===1,'Repeated selection is idempotent');
+$pdo->prepare("INSERT INTO users(email,display_name,password_hash,role,status) VALUES (?,?,?,?,?)")->execute([
+ 'second-package-test@example.test','Second Tester',password_hash('test-only-password-2',PASSWORD_DEFAULT),'customer','active'
+]);
+$secondUserId=(int)$pdo->lastInsertId();
+select_customer_package($pdo,$secondUserId,$id);
+assert_test(count(customer_package_selections($pdo,$secondUserId))===1,'Other account owns its separate selection');
+remove_customer_package($pdo,$userId,$id);
+assert_test(count(customer_package_selections($pdo,$userId))===0,'Customer can remove own selection');
+assert_test(count(customer_package_selections($pdo,$secondUserId))===1,'Removing selection cannot affect another customer');
+select_customer_package($pdo,$userId,$id);
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn()===0,'Selection does not create an order');
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===0,'Selection does not create a license');
 set_package_active($pdo,$id,false);
 try {select_customer_package($pdo,$userId,$id);throw new RuntimeException('Inactive package selected');}
 catch(DomainException $e){assert_test(true,'Inactive packages cannot be newly selected');}
 $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$userId]);
+$pdo->prepare('DELETE FROM users WHERE id=?')->execute([$secondUserId]);
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM customer_package_selections')->fetchColumn()===0,'Customer deletion cleans up package selections');
