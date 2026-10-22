@@ -23,7 +23,7 @@ $q=$pdo->prepare('SELECT id,project_name,slug,status,created_at FROM installatio
 $q=$pdo->prepare('SELECT p.name,p.sku,e.created_at FROM entitlements e INNER JOIN products p ON p.id=e.product_id WHERE e.user_id=? ORDER BY e.id DESC');$q->execute([$user['id']]);$entitlements=$q->fetchAll();
 $domain=get_setting('tenant_domain');
 $selectedPackages=customer_package_selections($pdo,(int)$user['id']);
-$testCheckoutReady=stripe_checkout_schema_ready($pdo) && str_starts_with((string)stripe_secret('stripe_api'),'sk_test_');
+$testCheckoutReady=stripe_checkout_schema_ready($pdo) && str_starts_with((string)stripe_secret('stripe_api'),'sk_test_') && get_setting('portal_origin')!=='';
 page_start('My account',$user);
 ?><main class="dashboard"><div class="dashboard-header"><div><span class="eyebrow">YOUR LUCKY GAME HUB</span><h1>Welcome back, <?=e($user['display_name'])?>.</h1><p>Manage your game spaces, downloads, and account from one place.</p></div><span class="pill">● ACCOUNT ACTIVE</span></div>
 <p><a class="button button-gold" href="/plans.php">Browse game packages →</a></p><div class="stat-grid"><div class="stat"><span>INSTALLATION REQUESTS</span><strong><?=count($requests)?></strong><small>Awaiting administrator provisioning</small></div><div class="stat"><span>OWNED PRODUCTS</span><strong><?=count($entitlements)?></strong><small>Entitlements live here</small></div><div class="stat"><span>ACCOUNT</span><strong>FREE</strong><small>Purchases will be available later</small></div></div>
