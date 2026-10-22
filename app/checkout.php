@@ -113,8 +113,8 @@ function start_homeserver_checkout(PDO $pdo,int $userId,int $productId,?callable
  }
 }
 function apply_paid_homeserver_session(PDO $pdo,array $event,array $session): bool {
- if(!in_array($event['type'],['checkout.session.completed','checkout.session.async_payment_succeeded'],true))return false;
- if(($session['payment_status']??null)!=='paid'||($session['mode']??null)!=='payment')return false;
+ if(($event['livemode']??null)!==false || !in_array($event['type'],['checkout.session.completed','checkout.session.async_payment_succeeded'],true))return false;
+ if(($session['livemode']??null)!==false || ($session['payment_status']??null)!=='paid'||($session['mode']??null)!=='payment')return false;
  if(($session['id']??null)!==$event['object_id'] || !is_string($session['id']))return false;
  if(($session['currency']??null)!=='usd' || !is_int($session['amount_total']??null))return false;
  $orderId=filter_var($session['client_reference_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
