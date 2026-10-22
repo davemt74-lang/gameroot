@@ -28,7 +28,12 @@ try {
  stripe_record_event(portal_pdo(),$event);
  if(!$event['livemode'] && in_array($event['type'],['checkout.session.completed','checkout.session.async_payment_succeeded'],true)){
   $full=json_decode($body,true,24,JSON_THROW_ON_ERROR);
-  if(is_array($full['data']['object']??null))apply_paid_homeserver_session(portal_pdo(),$event,$full['data']['object']);
+  $session=$full['data']['object']??null;
+  if(is_array($session) && ($session['mode']??null)==='payment' && ($session['payment_status']??null)==='paid'){
+   if(!apply_paid_homeserver_session(portal_pdo(),$event,$session)){
+    http_response_code(503);echo '{"received":false}';exit;
+   }
+  }
  }
  http_response_code(200);echo '{"received":true}';
 } catch(JsonException|DomainException $e) {
