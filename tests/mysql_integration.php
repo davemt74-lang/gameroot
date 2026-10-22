@@ -91,12 +91,13 @@ assert_test($url===$secondUrl,'Repeated Checkout request reuses same session');
 $q=$pdo->prepare('SELECT order_id,session_id FROM stripe_checkout_attempts WHERE user_id=?');$q->execute([$buyerId]);$attempt=$q->fetch();
 $orderId=(int)$attempt['order_id'];
 assert_test($attempt['session_id']==='cs_test_123456789ABC','Stripe session ID persisted');
-$paidSession=['id'=>$attempt['session_id'],'mode'=>'payment','payment_status'=>'paid','currency'=>'usd',
+$paidSession=['id'=>$attempt['session_id'],'livemode'=>false,'mode'=>'payment','payment_status'=>'paid','currency'=>'usd',
  'amount_total'=>7999,'client_reference_id'=>(string)$orderId,
  'metadata'=>['order_id'=>(string)$orderId,'user_id'=>(string)$buyerId]];
 $paidEvent=['id'=>'evt_CHECKOUT12345678','type'=>'checkout.session.completed','object_id'=>$attempt['session_id'],'livemode'=>false];
 stripe_record_event($pdo,$paidEvent);
 assert_test(!apply_paid_homeserver_session($pdo,$paidEvent,array_merge($paidSession,['amount_total'=>1])),'Amount mismatch cannot grant ownership');
+assert_test(!apply_paid_homeserver_session($pdo,$paidEvent,array_merge($paidSession,['livemode'=>true])),'Live-mode payment cannot use test-only fulfillment');
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===0,'Failed payment validation grants no entitlement');
 assert_test(apply_paid_homeserver_session($pdo,$paidEvent,$paidSession),'Verified payment grants ownership');
 assert_test(apply_paid_homeserver_session($pdo,$paidEvent,$paidSession),'Duplicate paid event is safe');
