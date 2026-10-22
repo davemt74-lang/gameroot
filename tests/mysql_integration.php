@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/app/packages.php';
+require dirname(__DIR__).'/app/stripe.php';
 function assert_test(bool $condition,string $label):void {if(!$condition)throw new RuntimeException($label);echo "PASS $label\n";}
 $settings=[
  'db'=>['host'=>getenv('TEST_DB_HOST')?:'127.0.0.1','port'=>(int)(getenv('TEST_DB_PORT')?:3306),'name'=>getenv('TEST_DB_NAME')?:'gameroot_test','user'=>getenv('TEST_DB_USER')?:'portal','pass'=>getenv('TEST_DB_PASSWORD')?:'portalpass'],
@@ -59,3 +60,15 @@ catch(DomainException $e){assert_test(true,'Inactive packages cannot be newly se
 $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$userId]);
 $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$secondUserId]);
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM customer_package_selections')->fetchColumn()===0,'Customer deletion cleans up package selections');
+
+assert_test(stripe_schema_ready($pdo),'New installation has Stripe event inbox');
+upgrade_stripe_schema($pdo);upgrade_stripe_schema($pdo);
+$stripeEvent=['id'=>'evt_TEST12345678','type'=>'checkout.session.completed','object_id'=>'cs_test_12345678','livemode'=>false];
+assert_test(stripe_record_event($pdo,$stripeEvent),'Supported Stripe event recorded');
+assert_test(stripe_record_event($pdo,$stripeEvent),'Duplicate Stripe event accepted idempotently');
+$stored=$pdo->query("SELECT state,deliveries FROM stripe_webhook_events WHERE event_id='evt_TEST12345678'")->fetch();
+assert_test($stored && $stored['state']==='pending' && (int)$stored['deliveries']===2,'Duplicate delivery tracked without duplicate rows');
+assert_test(!stripe_record_event($pdo,array_merge($stripeEvent,['type'=>'unknown.event'])),'Unsupported events ignored');
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM stripe_webhook_events')->fetchColumn()===1,'Event inbox stores one unique event');
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn()===0,'Webhook inbox does not issue orders');
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===0,'Webhook inbox does not grant licenses');
