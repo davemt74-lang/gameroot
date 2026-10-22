@@ -111,7 +111,7 @@ code,url_,body_,h_=request('/checkout.php',{'package_id':plan_id})
 check(code==419,'Checkout rejects missing CSRF token')
 request('/account.php',{'csrf':token(content),'action':'remove_package_selection','package_id':plan_id})
 status,url,content,h=request('/account.php')
-check('No packages selected' in content,'Customer can remove selected package')
+check('HomeServer HTTP Test' not in content and 'Hosting HTTP Monthly' in content,'Customer can remove HomeServer while preserving separate hosting selection')
 
 status,url,content,h=request('/account.php')
 request('/account.php',{'csrf':token(content),'action':'request_installation','project_name':'Friday Fun','slug':'friday-fun'})

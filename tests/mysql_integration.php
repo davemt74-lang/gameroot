@@ -160,6 +160,15 @@ assert_test(!apply_paid_hosting_checkout($pdo,$hostingEvent,array_merge($paidHos
 assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Paid signed hosting checkout activates');
 assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate hosting checkout is idempotent');
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===0,'Hosting subscriptions grant no permanent HomeServer entitlements');
+
+$scheduledEvent=['id'=>'evt_CANCELPEND12345','type'=>'customer.subscription.updated','object_id'=>'sub_1234567890','livemode'=>false];
+$scheduledObject=['id'=>'sub_1234567890','livemode'=>false,'customer'=>'cus_1234567890','status'=>'active','cancel_at_period_end'=>true];
+stripe_record_event($pdo,$scheduledEvent);
+assert_test(apply_hosting_lifecycle_event($pdo,$scheduledEvent,$scheduledObject,100),'Scheduled cancellation recorded without premature suspension');
+assert_test((int)hosting_subscription_rows($pdo,$hostingUser)[0]['cancel_at_period_end']===1,'Hosting scheduled cancellation shown to customer');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Old Checkout duplicate acknowledged after scheduling cancellation');
+assert_test((int)hosting_subscription_rows($pdo,$hostingUser)[0]['cancel_at_period_end']===1,'Old Checkout cannot clear scheduled cancellation');
+
 $portalResult=start_hosting_billing_portal($pdo,$hostingUser,(int)$hosting['id'],
  fn(array $params)=>['url'=>'https://billing.stripe.com/p/session/test_1234567890'],
  'sk_test_1234567890','https://example.com');
@@ -180,6 +189,8 @@ $failedEvent=['id'=>'evt_FAILED12345678','type'=>'invoice.payment_failed','objec
 stripe_record_event($pdo,$failedEvent);
 assert_test(apply_hosting_lifecycle_event($pdo,$failedEvent,$fail,102),'Failed renewal suspends hosted subscription');
 assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Hosting billing suspended on failure');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate old Checkout acknowledged after failure');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Duplicate Checkout cannot undo past-due state');
 assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent,$invoice,101),'Out-of-order paid invoice ignored safely');
 assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Older invoice cannot reactivate after failure');
 $renewEvent2=['id'=>'evt_RENEWAL22345678','type'=>'invoice.paid','object_id'=>'in_RENEW12345678','livemode'=>false];
@@ -191,6 +202,8 @@ $cancelObject=['id'=>'sub_1234567890','livemode'=>false,'customer'=>'cus_1234567
 stripe_record_event($pdo,$cancelEvent);
 assert_test(apply_hosting_lifecycle_event($pdo,$cancelEvent,$cancelObject,104),'Cancellation removes hosting authorization');
 assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Canceled hosting remains canceled');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate Checkout acknowledged after cancellation');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Duplicate Checkout cannot re-enable canceled hosting');
 assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent2,$invoice2,105),'Late renewal cannot re-enable canceled subscription');
 assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Canceled hosting not resurrected by late invoice');
 $secondMock=function(array $params,string $key):array{if($params['line_items'][0]['price_data']['recurring']['interval']!=='year' || $params['line_items'][0]['price_data']['unit_amount']!==12000)throw new RuntimeException('Wrong annual interval/price');return [
@@ -201,6 +214,8 @@ $q=$pdo->prepare('SELECT billing_interval,recurring_cents,state FROM hosting_sub
 $q->execute([$hostingRequest]);$restarted=$q->fetch();
 assert_test($restarted['billing_interval']==='annual' && (int)$restarted['recurring_cents']===12000 && $restarted['state']==='ready',
  'Annual plan has independent 12-month price and checkout');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Historical paid Checkout safely ignored after resubscribe');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='ready','Old paid Checkout cannot activate replacement annual subscription');
 $pdo->exec('DELETE FROM hosting_subscription_invoices');
 $pdo->exec('DELETE FROM hosting_subscriptions');
 $pdo->prepare('DELETE FROM orders WHERE user_id=?')->execute([$hostingUser]);

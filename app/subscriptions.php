@@ -150,27 +150,44 @@ function apply_paid_hosting_checkout(PDO $pdo,array $event,array $session): bool
     || ($session['currency']??null)!=='usd' || !is_int($session['amount_total']??null)
     || !hosting_stripe_id($session['subscription']??null,'sub') || !hosting_stripe_id($session['customer']??null,'cus'))return false;
  $orderId=filter_var($session['client_reference_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
- if(!$orderId)return false;
+ if(!$orderId || (string)$orderId!==(string)($session['metadata']['order_id']??''))return false;
  $pdo->beginTransaction();
  try {
   $q=$pdo->prepare("SELECT h.id,h.user_id,h.product_id,h.installation_request_id,h.session_id,h.state,
-    h.recurring_cents,h.stripe_subscription_id,o.status AS order_status,o.total_cents
+    h.recurring_cents,h.stripe_subscription_id,h.stripe_customer_id,
+    o.status AS order_status,o.total_cents
     FROM hosting_subscriptions h INNER JOIN orders o ON o.id=h.order_id WHERE h.order_id=? FOR UPDATE");
   $q->execute([$orderId]);$row=$q->fetch();
-  if(!$row || !in_array($row['state'],['ready','active'],true) || $row['session_id']!==$session['id']
-     || ($row['stripe_subscription_id']!==null && $row['stripe_subscription_id']!==$session['subscription'])
+  if(!$row){
+   // A canceled subscription may have been replaced by a new checkout. Historical,
+   // already-paid Checkout webhooks are acknowledged but may never restore service.
+   $old=$pdo->prepare('SELECT status,provider_reference,user_id FROM orders WHERE id=? FOR UPDATE');
+   $old->execute([$orderId]);$paid=$old->fetch();
+   if(!$paid || $paid['status']!=='paid' || $paid['provider_reference']!==$session['id']
+      || (string)$paid['user_id']!==(string)($session['metadata']['user_id']??'')){$pdo->rollBack();return false;}
+   $q=$pdo->prepare("UPDATE stripe_webhook_events SET state='applied' WHERE event_id=?");
+   $q->execute([$event['id']]);$pdo->commit();return true;
+  }
+  if($row['session_id']!==$session['id']
      || !in_array($row['order_status'],['pending','paid'],true)
      || (int)$row['recurring_cents']!==$session['amount_total']
      || (int)$row['total_cents']!==$session['amount_total']
      || (string)$row['user_id']!==(string)($session['metadata']['user_id']??'')
      || (string)$row['installation_request_id']!==(string)($session['metadata']['installation_request_id']??'')
-     || (string)$orderId!==(string)($session['metadata']['order_id']??'')){
+     || ($row['stripe_subscription_id']!==null && $row['stripe_subscription_id']!==$session['subscription'])
+     || ($row['stripe_customer_id']!==null && $row['stripe_customer_id']!==$session['customer'])){
    $pdo->rollBack();return false;
   }
-  $q=$pdo->prepare("UPDATE hosting_subscriptions SET state='active',stripe_subscription_id=?,stripe_customer_id=?,cancel_at_period_end=0 WHERE id=?");
-  $q->execute([$session['subscription'],$session['customer'],$row['id']]);
-  $q=$pdo->prepare("UPDATE orders SET status='paid',provider_reference=? WHERE id=? AND status IN ('pending','paid')");
-  $q->execute([$session['id'],$orderId]);
+  if($row['state']==='ready' && $row['order_status']==='pending'){
+   $q=$pdo->prepare("UPDATE hosting_subscriptions SET state='active',stripe_subscription_id=?,stripe_customer_id=?,cancel_at_period_end=0 WHERE id=?");
+   $q->execute([$session['subscription'],$session['customer'],$row['id']]);
+   $q=$pdo->prepare("UPDATE orders SET status='paid',provider_reference=? WHERE id=? AND status='pending'");
+   $q->execute([$session['id'],$orderId]);
+  } elseif($row['order_status']!=='paid' || $row['stripe_subscription_id']!==$session['subscription']
+     || $row['stripe_customer_id']!==$session['customer']){
+   $pdo->rollBack();return false;
+  }
+  // A late/duplicate checkout MUST NOT change past_due, canceled or cancel_at_period_end.
   $q=$pdo->prepare("UPDATE stripe_webhook_events SET state='applied' WHERE event_id=?");
   $q->execute([$event['id']]);$pdo->commit();return true;
  } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}

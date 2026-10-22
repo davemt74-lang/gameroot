@@ -27,6 +27,9 @@ $testCheckoutReady=stripe_checkout_schema_ready($pdo) && str_starts_with((string
 $hostingCheckoutReady=hosting_checkout_ready($pdo);
 $hostingSubscriptions=hosting_subscription_rows($pdo,(int)$user['id']);
 $reviewedRequests=array_values(array_filter($requests,static fn(array $r):bool=>$r['status']==='reviewed'));
+$subscriptionStates=[];
+foreach($hostingSubscriptions as $subscription){$subscriptionStates[(int)$subscription['installation_request_id']]=$subscription['state'];}
+$availableRequests=array_values(array_filter($reviewedRequests,static fn(array $r):bool=>!isset($subscriptionStates[(int)$r['id']]) || in_array($subscriptionStates[(int)$r['id']],['canceled','expired'],true)));
 page_start('My account',$user);
 ?><main class="dashboard"><div class="dashboard-header"><div><span class="eyebrow">YOUR LUCKY GAME HUB</span><h1>Welcome back, <?=e($user['display_name'])?>.</h1><p>Manage your game spaces, downloads, and account from one place.</p></div><span class="pill">● ACCOUNT ACTIVE</span></div>
 <p><a class="button button-gold" href="/plans.php">Browse game packages →</a></p><div class="stat-grid"><div class="stat"><span>INSTALLATION REQUESTS</span><strong><?=count($requests)?></strong><small>Awaiting administrator provisioning</small></div><div class="stat"><span>OWNED PRODUCTS</span><strong><?=count($entitlements)?></strong><small>Entitlements live here</small></div><div class="stat"><span>ACCOUNT</span><strong>ACTIVE</strong><small>Manage purchases and hosting below</small></div></div>
@@ -39,9 +42,9 @@ page_start('My account',$user);
 <?php if(!$selectedPackages):empty_notice('No packages selected','Browse available packages to choose HomeServer or hosted plans.');else:foreach($selectedPackages as $item):?>
 <div class="request-row"><div><strong><?=e($item['name'])?></strong><small><?=e($item['delivery_type'])?> · <?=e(str_replace('_',' ',$item['billing_type']))?><?= $item['billing_interval']?' / '.e($item['billing_interval']):''?> · $<?=e(number_format((int)$item['price_cents']/100,2))?></small></div><div class="integration-actions"><span class="pill pill-muted"><?=$item['active']?'Selected':'Plan unavailable'?></span><?php if($testCheckoutReady&&$item['active']&&$item['delivery_type']==='homeserver'&&$item['billing_type']==='one_time'&&(int)$item['price_cents']>0):?><form method="post" action="/checkout.php" class="inline-control"><?=csrf_input()?><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><button class="button button-compact button-gold" type="submit">Stripe test checkout</button></form><?php endif;?>
 <?php if($hostingCheckoutReady&&$item['active']&&$item['delivery_type']==='hosting_addon'&&$item['billing_type']==='subscription'&&(int)$item['price_cents']>0):?>
-<?php if($reviewedRequests):?><form method="post" action="/subscribe.php" class="inline-control"><?=csrf_input()?><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><label>Installation
-<select name="request_id" required><?php foreach($reviewedRequests as $request):?><option value="<?=e($request['id'])?>"><?=e($request['slug'])?></option><?php endforeach;?></select></label><button class="button button-compact button-gold" type="submit">Stripe test subscription</button></form>
-<?php else:?><span class="pill pill-muted">Requires reviewed installation</span><?php endif;?>
+<?php if($availableRequests):?><form method="post" action="/subscribe.php" class="inline-control"><?=csrf_input()?><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><label>Installation
+<select name="request_id" required><?php foreach($availableRequests as $request):?><option value="<?=e($request['id'])?>"><?=e($request['slug'])?></option><?php endforeach;?></select></label><button class="button button-compact button-gold" type="submit">Stripe test subscription</button></form>
+<?php else:?><span class="pill pill-muted">Requires available reviewed installation</span><?php endif;?>
 <?php endif;?>
 <form method="post" class="inline-control"><?=csrf_input()?><input type="hidden" name="action" value="remove_package_selection"><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><button class="button button-compact button-outline" type="submit">Remove</button></form></div></div>
 <?php endforeach;endif;?></section>
