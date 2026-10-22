@@ -8,7 +8,7 @@ function page_start(string $title, ?array $user=null, string $active=''): void {
 <meta name="theme-color" content="#101323"><meta name="description" content="Lucky Game Hub — private home gaming, connected phones and your own game night.">
 <title><?=e($title)?> — Lucky Game Hub</title><link rel="stylesheet" href="/assets/app.css?v=010"></head>
 <body><header class="site-header"><a class="brand" href="/index.php" aria-label="Lucky Game Hub home"><span class="brand-mark">✦</span><span>LUCKY<span class="brand-gold">GAME</span><small>HUB</small></span></a>
-<nav class="top-nav" aria-label="Primary"><a href="/index.php#features">Features</a><a href="/index.php#how-it-works">How it works</a><a href="/index.php#pricing">Pricing</a></nav>
+<nav class="top-nav" aria-label="Primary"><a href="/index.php#features">Features</a><a href="/index.php#how-it-works">How it works</a><a href="/plans.php">Packages</a></nav>
 <div class="top-actions">
 <?php if($user): ?><a class="nav-button" href="/account.php">My Account</a><?php if($user['role']==='owner'): ?><a class="nav-button" href="/admin.php">Admin</a><?php endif; ?><form action="/logout.php" method="post" class="inline-form"><?=csrf_input()?><button class="nav-link" type="submit">Log out</button></form>
 <?php else: ?><a class="nav-link" href="/login.php">Log in</a><a class="nav-button" href="/register.php">Create account <span aria-hidden="true">↗</span></a><?php endif; ?>
