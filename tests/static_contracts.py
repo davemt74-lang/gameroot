@@ -72,3 +72,23 @@ assert "verify_csrf()" in checkout_entry and "require_user()" in checkout_entry
 assert "stripe_checkout_attempts" in (root/'app/schema.sql').read_text()
 assert "portal_origin" in (root/'public/admin.php').read_text()
 assert "checkout.session.completed" in (root/'public/stripe_webhook.php').read_text()
+
+
+subscriptions=(root/'app/subscriptions.php').read_text()
+subscribe=(root/'public/subscribe.php').read_text()
+portal_entry=(root/'public/billing_portal.php').read_text()
+assert "hosting_subscription_invoices" in (root/'app/schema.sql').read_text()
+assert "hosting_subscriptions" in (root/'app/schema.sql').read_text()
+assert "hosting_subscription_rows" in account and "/subscribe.php" in account and "/billing_portal.php" in account
+assert "hosting_addon" in subscriptions and "subscription" in subscriptions
+assert "hosting_interval" in subscriptions and "'month'" in subscriptions and "'year'" in subscriptions
+assert "gameroot-hosting-" in subscriptions and "FOR UPDATE" in subscriptions
+assert "payment_status" in subscriptions and "invoice.paid" in subscriptions and "invoice.payment_failed" in subscriptions
+assert "customer.subscription.deleted" in subscriptions and "stripe_portal_url" in subscriptions
+assert "customer.subscription.updated" in subscriptions and "last_event_created" in subscriptions
+assert "verify_csrf()" in subscribe and "portal_require_https()" in subscribe and "require_user()" in subscribe
+assert "verify_csrf()" in portal_entry and "portal_require_https()" in portal_entry and "require_user()" in portal_entry
+assert "upgrade_hosting_subscriptions" in admin
+assert "apply_hosting_lifecycle_event" in stripe_webhook and "apply_paid_hosting_checkout" in stripe_webhook
+assert "apply_expired_hosting_checkout" in stripe_webhook
+print('PASS Stripe subscription static security contracts')

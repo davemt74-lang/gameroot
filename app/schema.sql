@@ -99,3 +99,39 @@ CREATE TABLE IF NOT EXISTS stripe_checkout_attempts (
  FOREIGN KEY (product_id) REFERENCES products(id),
  INDEX checkout_user_product (user_id, product_id, state, expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS hosting_subscriptions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  installation_request_id BIGINT UNSIGNED NOT NULL UNIQUE,
+  user_id BIGINT UNSIGNED NOT NULL,
+  product_id BIGINT UNSIGNED NOT NULL,
+  order_id BIGINT UNSIGNED NOT NULL UNIQUE,
+  idempotency_key VARCHAR(100) NOT NULL UNIQUE,
+  session_id VARCHAR(190) NULL UNIQUE,
+  checkout_url TEXT NULL,
+  stripe_subscription_id VARCHAR(190) NULL UNIQUE,
+  stripe_customer_id VARCHAR(190) NULL,
+  billing_interval VARCHAR(16) NOT NULL,
+  recurring_cents INT UNSIGNED NOT NULL,
+  state VARCHAR(24) NOT NULL DEFAULT 'creating',
+  cancel_at_period_end TINYINT(1) NOT NULL DEFAULT 0,
+  last_event_created BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (installation_request_id) REFERENCES installation_requests(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  INDEX hosting_user (user_id,state)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS hosting_subscription_invoices (
+  invoice_id VARCHAR(190) NOT NULL PRIMARY KEY,
+  hosting_subscription_id BIGINT UNSIGNED NOT NULL,
+  amount_paid INT UNSIGNED NOT NULL,
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  paid_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (hosting_subscription_id) REFERENCES hosting_subscriptions(id),
+  INDEX hosting_invoice_history (hosting_subscription_id,paid_at)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

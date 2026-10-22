@@ -13,7 +13,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   $id=filter_var($_POST['package_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
   if(!$id)throw new DomainException('Invalid package.');
   select_customer_package($pdo,(int)$user['id'],$id);
-  flash('success','Package selected. Checkout is not yet available; no charge or license was issued.');
+  flash('success','Package selected. No payment was taken. Eligible Stripe test Checkout options appear in your account.');
   redirect('/account.php');
  } catch(DomainException $e){$error=$e->getMessage();}
  catch(Throwable $e){error_log('Package selection failed: '.$e->getMessage());$error='Unable to select that package.';}
@@ -25,7 +25,7 @@ page_start('GameRoot packages',$user);
 <main class="dashboard">
 <div class="dashboard-header"><div><span class="eyebrow">CHOOSE YOUR GAME NIGHT</span><h1>Packages</h1><p>Own a local HomeServer, add optional hosting, or choose a managed Cloud installation.</p></div><a class="button button-outline" href="<?=$user?'/account.php':'/index.php'?>">← Back</a></div>
 <?php form_error($error); ?>
-<div class="notice"><strong>Package selection is available; checkout is coming next.</strong><p>Selecting a package adds it to your account for future checkout. No payment, recurring charge, download license or hosting installation is created now.</p></div>
+<div class="notice"><strong>Select packages without paying.</strong><p>Package selection creates no payment. After selection, eligible HomeServer and reviewed subdomain hosting packages offer separate Stripe test-mode Checkout in your account. No live charges, automatic installation or download fulfillment.</p></div>
 <?php if(!$ready):empty_notice('Package catalog upgrade pending','An administrator must enable the package catalog before plans are available.');?>
 <?php elseif(!$packages):empty_notice('Packages coming soon','The owner has not activated any packages yet.');?>
 <?php else:?>

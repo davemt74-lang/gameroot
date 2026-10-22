@@ -46,7 +46,7 @@ function stripe_verify_signature(string $payload,string $header,string $secret,?
 }
 function stripe_allowed_event_types(): array {
     return [
-      'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.async_payment_failed',
+      'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.async_payment_failed','checkout.session.expired',
       'invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted',
       'charge.refunded'
     ];

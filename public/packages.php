@@ -53,7 +53,7 @@ page_start('Package builder',$owner);
 <form method="post"><?=csrf_input()?><input type="hidden" name="action" value="upgrade_packages"><button class="button button-gold" type="submit">Enable package management</button></form></section>
 <?php else:?>
 <section class="panel"><div class="panel-heading"><div><span class="eyebrow">CATALOG</span><h2>Configured packages</h2></div><span class="pill pill-muted"><?=count($packages)?> total</span></div>
-<p>Only active packages will appear to customers in the next storefront section. Checkout, charges, subscription activation, and downloads are still disabled.</p>
+<p>Active packages appear in the storefront. Stripe sandbox Checkout is available for eligible one-time HomeServer and reviewed monthly/annual hosting plans. Live charges, provisioning, and downloads remain disabled.</p>
 <?php if(!$packages):empty_notice('No packages yet','Create your first HomeServer or hosting package below.');endif;?>
 <div class="table-wrap"><table><thead><tr><th>Package</th><th>Delivery</th><th>Billing</th><th>Price</th><th>Status</th><th>Manage</th></tr></thead><tbody>
 <?php foreach($packages as $item):?>
@@ -77,6 +77,6 @@ page_start('Package builder',$owner);
 <label>Price (USD)<input type="number" name="price" required min="0" max="1000000" step="0.01" value="<?=e($values['price']??'0.00')?>"></label>
 <label>Subscription interval<select name="billing_interval"><option value="">Not applicable</option><option value="monthly" <?=($values['billing_interval']??'')==='monthly'?'selected':''?>>Monthly</option><option value="annual" <?=($values['billing_interval']??'')==='annual'?'selected':''?>>Annual</option></select></label></div>
 <label>Package features — one per line<textarea name="features" rows="5" maxlength="5000" placeholder="Private local play&#10;Phone controllers&#10;Video editor"><?=e($values['features']??'')?></textarea></label>
-<div class="notice"><strong>No charge or fulfillment occurs when a package is activated.</strong><p>Public checkout, subscriptions, licenses and downloads will be certified separately.</p></div>
+<div class="notice"><strong>No charge or fulfillment occurs when a package is activated.</strong><p>Activating a package makes it selectable, but does not create a charge. Eligible Stripe test-mode Checkout requires a separate customer action; live payments, DNS changes, and downloads remain disabled.</p></div>
 <button class="button button-gold" type="submit"><?=$edit?'Save package changes':'Create draft package'?></button></form></section>
 <?php endif;?></main><?php page_end();?>

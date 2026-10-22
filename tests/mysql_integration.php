@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/app/packages.php';
-require dirname(__DIR__).'/app/checkout.php';
+require dirname(__DIR__).'/app/subscriptions.php';
 function assert_test(bool $condition,string $label):void {if(!$condition)throw new RuntimeException($label);echo "PASS $label\n";}
 $settings=[
  'db'=>['host'=>getenv('TEST_DB_HOST')?:'127.0.0.1','port'=>(int)(getenv('TEST_DB_PORT')?:3306),'name'=>getenv('TEST_DB_NAME')?:'gameroot_test','user'=>getenv('TEST_DB_USER')?:'portal','pass'=>getenv('TEST_DB_PASSWORD')?:'portalpass'],
@@ -111,3 +111,114 @@ $pdo->prepare('DELETE FROM stripe_checkout_attempts WHERE user_id=?')->execute([
 $pdo->prepare('DELETE FROM orders WHERE user_id=?')->execute([$buyerId]);
 $pdo->prepare('DELETE FROM users WHERE id=?')->execute([$buyerId]);
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()===0,'Checkout tests leave installer database with no users');
+
+
+// C3: monthly/annual hosting subscriptions are separate from permanent software licenses.
+assert_test(hosting_schema_ready($pdo),'Fresh install has hosting subscription and invoice schemas');
+upgrade_hosting_schema($pdo);upgrade_hosting_schema($pdo);
+$hostingPlan=[
+ 'sku'=>'hosting-monthly-test','name'=>'Private Hosted Monthly','description'=>'Hosted private game domain',
+ 'delivery_type'=>'hosting_addon','billing_type'=>'subscription','billing_interval'=>'monthly',
+ 'price'=>'12.00','features'=>'Private subdomain'
+];
+$hostingId=create_package($pdo,$hostingPlan);set_package_active($pdo,$hostingId,true);
+$annualPlan=array_merge($hostingPlan,['sku'=>'hosting-annual-test','name'=>'Private Hosted Annual','billing_interval'=>'annual','price'=>'120.00']);
+$annualId=create_package($pdo,$annualPlan);set_package_active($pdo,$annualId,true);
+$pdo->prepare("INSERT INTO users(email,display_name,password_hash,role,status) VALUES (?,?,?,?,?)")
+ ->execute(['hosting-test@example.test','Hosting Buyer',password_hash('hosting-test-password',PASSWORD_DEFAULT),'customer','active']);
+$hostingUser=(int)$pdo->lastInsertId();
+$pdo->prepare("INSERT INTO users(email,display_name,password_hash,role,status) VALUES (?,?,?,?,?)")
+ ->execute(['hosting-other@example.test','Other User',password_hash('hosting-other-password',PASSWORD_DEFAULT),'customer','active']);
+$hostingOther=(int)$pdo->lastInsertId();
+$pdo->prepare("INSERT INTO installation_requests(user_id,project_name,slug,kind,status) VALUES (?,?,?,?,?)")
+ ->execute([$hostingUser,'Hosting Night','hosting-night','hosted_game','pending']);
+$hostingRequest=(int)$pdo->lastInsertId();
+$mockSubscription=function(array $params,string $key):array {
+ if($params['mode']!=='subscription' || $params['line_items'][0]['price_data']['recurring']['interval']!=='month'
+  || $params['line_items'][0]['price_data']['unit_amount']!==1200 || $key==='')throw new RuntimeException('Wrong subscription request');
+ return ['id'=>'cs_test_SUBS12345678','url'=>'https://checkout.stripe.com/c/pay/cs_test_SUBS12345678'];
+};
+try{start_hosting_subscription($pdo,$hostingUser,$hostingRequest,$hostingId,$mockSubscription,'sk_test_1234567890','https://example.com');throw new RuntimeException('Pending request billed');}
+catch(DomainException $e){assert_test(true,'Pending installation cannot start a paid hosting subscription');}
+$pdo->prepare("UPDATE installation_requests SET status='reviewed' WHERE id=?")->execute([$hostingRequest]);
+try{start_hosting_subscription($pdo,$hostingOther,$hostingRequest,$hostingId,$mockSubscription,'sk_test_1234567890','https://example.com');throw new RuntimeException('Cross-account installation billed');}
+catch(DomainException $e){assert_test(true,'Cross-account hosting Checkout blocked');}
+$url=start_hosting_subscription($pdo,$hostingUser,$hostingRequest,$hostingId,$mockSubscription,'sk_test_1234567890','https://example.com');
+assert_test(stripe_checkout_url($url),'Monthly hosting Stripe test Checkout created');
+assert_test($url===start_hosting_subscription($pdo,$hostingUser,$hostingRequest,$hostingId,$mockSubscription,'sk_test_1234567890','https://example.com'),'Repeated hosting checkout reuses session');
+try{start_hosting_subscription($pdo,$hostingUser,$hostingRequest,$annualId,$mockSubscription,'sk_test_1234567890','https://example.com');throw new RuntimeException('Duplicate plan billed');}
+catch(DomainException $e){assert_test(true,'One subdomain cannot start two competing hosting plans');}
+$q=$pdo->prepare('SELECT * FROM hosting_subscriptions WHERE installation_request_id=?');$q->execute([$hostingRequest]);$hosting=$q->fetch();
+$order=(int)$hosting['order_id'];
+$paidHosting=['id'=>'cs_test_SUBS12345678','livemode'=>false,'mode'=>'subscription','payment_status'=>'paid','currency'=>'usd',
+ 'amount_total'=>1200,'client_reference_id'=>(string)$order,'subscription'=>'sub_1234567890','customer'=>'cus_1234567890',
+ 'metadata'=>['order_id'=>(string)$order,'user_id'=>(string)$hostingUser,'installation_request_id'=>(string)$hostingRequest]];
+$hostingEvent=['id'=>'evt_HOSTING12345678','type'=>'checkout.session.completed','object_id'=>$paidHosting['id'],'livemode'=>false];
+stripe_record_event($pdo,$hostingEvent);
+assert_test(!apply_paid_hosting_checkout($pdo,$hostingEvent,array_merge($paidHosting,['amount_total'=>1199])),'Mismatched hosting amount cannot activate');
+assert_test(!apply_paid_hosting_checkout($pdo,$hostingEvent,array_merge($paidHosting,['metadata'=>['user_id'=>(string)$hostingOther]])),'Forged subscription metadata cannot activate');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Paid signed hosting checkout activates');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate hosting checkout is idempotent');
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===0,'Hosting subscriptions grant no permanent HomeServer entitlements');
+
+$scheduledEvent=['id'=>'evt_CANCELPEND12345','type'=>'customer.subscription.updated','object_id'=>'sub_1234567890','livemode'=>false];
+$scheduledObject=['id'=>'sub_1234567890','livemode'=>false,'customer'=>'cus_1234567890','status'=>'active','cancel_at_period_end'=>true];
+stripe_record_event($pdo,$scheduledEvent);
+assert_test(apply_hosting_lifecycle_event($pdo,$scheduledEvent,$scheduledObject,100),'Scheduled cancellation recorded without premature suspension');
+assert_test((int)hosting_subscription_rows($pdo,$hostingUser)[0]['cancel_at_period_end']===1,'Hosting scheduled cancellation shown to customer');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Old Checkout duplicate acknowledged after scheduling cancellation');
+assert_test((int)hosting_subscription_rows($pdo,$hostingUser)[0]['cancel_at_period_end']===1,'Old Checkout cannot clear scheduled cancellation');
+
+$portalResult=start_hosting_billing_portal($pdo,$hostingUser,(int)$hosting['id'],
+ fn(array $params)=>['url'=>'https://billing.stripe.com/p/session/test_1234567890'],
+ 'sk_test_1234567890','https://example.com');
+assert_test(stripe_portal_url($portalResult),'Owner can manage own paid subscription through Stripe Billing Portal');
+try{start_hosting_billing_portal($pdo,$hostingOther,(int)$hosting['id'],null,'sk_test_1234567890','https://example.com');throw new RuntimeException('Cross-account portal accepted');}
+catch(DomainException $e){assert_test(true,'Cross-account Stripe Billing Portal rejected');}
+$invoice=['id'=>'in_1234567890','livemode'=>false,'paid'=>true,'status'=>'paid','currency'=>'usd','amount_paid'=>1200,
+ 'subscription'=>'sub_1234567890','customer'=>'cus_1234567890'];
+$renewEvent=['id'=>'evt_RENEWAL12345678','type'=>'invoice.paid','object_id'=>'in_1234567890','livemode'=>false];
+stripe_record_event($pdo,$renewEvent);
+assert_test(!apply_hosting_lifecycle_event($pdo,$renewEvent,array_merge($invoice,['customer'=>'cus_OTHER12345678']),101),'Foreign customer invoice rejected');
+assert_test(!apply_hosting_lifecycle_event($pdo,$renewEvent,array_merge($invoice,['amount_paid'=>1]),101),'Underpaid or changed subscription amount cannot renew hosting');
+assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent,$invoice,101),'Verified recurring invoice recorded');
+assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent,$invoice,101),'Duplicate invoice does not duplicate renewal');
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM hosting_subscription_invoices')->fetchColumn()===1,'Renewal invoice deduplicated');
+$fail=['id'=>'in_FAIL12345678','livemode'=>false,'paid'=>false,'subscription'=>'sub_1234567890','customer'=>'cus_1234567890'];
+$failedEvent=['id'=>'evt_FAILED12345678','type'=>'invoice.payment_failed','object_id'=>$fail['id'],'livemode'=>false];
+stripe_record_event($pdo,$failedEvent);
+assert_test(apply_hosting_lifecycle_event($pdo,$failedEvent,$fail,102),'Failed renewal suspends hosted subscription');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Hosting billing suspended on failure');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate old Checkout acknowledged after failure');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Duplicate Checkout cannot undo past-due state');
+assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent,$invoice,101),'Out-of-order paid invoice ignored safely');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='past_due','Older invoice cannot reactivate after failure');
+$renewEvent2=['id'=>'evt_RENEWAL22345678','type'=>'invoice.paid','object_id'=>'in_RENEW12345678','livemode'=>false];
+$invoice2=array_merge($invoice,['id'=>'in_RENEW12345678']);
+stripe_record_event($pdo,$renewEvent2);
+assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent2,$invoice2,103),'New verified renewal restores hosting');
+$cancelEvent=['id'=>'evt_CANCEL12345678','type'=>'customer.subscription.deleted','object_id'=>'sub_1234567890','livemode'=>false];
+$cancelObject=['id'=>'sub_1234567890','livemode'=>false,'customer'=>'cus_1234567890'];
+stripe_record_event($pdo,$cancelEvent);
+assert_test(apply_hosting_lifecycle_event($pdo,$cancelEvent,$cancelObject,104),'Cancellation removes hosting authorization');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Canceled hosting remains canceled');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Duplicate Checkout acknowledged after cancellation');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Duplicate Checkout cannot re-enable canceled hosting');
+assert_test(apply_hosting_lifecycle_event($pdo,$renewEvent2,$invoice2,105),'Late renewal cannot re-enable canceled subscription');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='canceled','Canceled hosting not resurrected by late invoice');
+$secondMock=function(array $params,string $key):array{if($params['line_items'][0]['price_data']['recurring']['interval']!=='year' || $params['line_items'][0]['price_data']['unit_amount']!==12000)throw new RuntimeException('Wrong annual interval/price');return [
+ 'id'=>'cs_test_RESTART12345678','url'=>'https://checkout.stripe.com/c/pay/cs_test_RESTART12345678'];};
+assert_test(stripe_checkout_url(start_hosting_subscription($pdo,$hostingUser,$hostingRequest,$annualId,$secondMock,'sk_test_1234567890','https://example.com')),
+ 'Canceled hosting may subscribe again with annual package');
+$q=$pdo->prepare('SELECT billing_interval,recurring_cents,state FROM hosting_subscriptions WHERE installation_request_id=?');
+$q->execute([$hostingRequest]);$restarted=$q->fetch();
+assert_test($restarted['billing_interval']==='annual' && (int)$restarted['recurring_cents']===12000 && $restarted['state']==='ready',
+ 'Annual plan has independent 12-month price and checkout');
+assert_test(apply_paid_hosting_checkout($pdo,$hostingEvent,$paidHosting),'Historical paid Checkout safely ignored after resubscribe');
+assert_test(hosting_subscription_rows($pdo,$hostingUser)[0]['state']==='ready','Old paid Checkout cannot activate replacement annual subscription');
+$pdo->exec('DELETE FROM hosting_subscription_invoices');
+$pdo->exec('DELETE FROM hosting_subscriptions');
+$pdo->prepare('DELETE FROM orders WHERE user_id=?')->execute([$hostingUser]);
+$pdo->prepare('DELETE FROM installation_requests WHERE user_id=?')->execute([$hostingUser]);
+$pdo->prepare('DELETE FROM users WHERE id IN (?,?)')->execute([$hostingUser,$hostingOther]);
+assert_test((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()===0,'Subscription integration leaves fresh database installable');

@@ -25,7 +25,7 @@ jobs:
           from pathlib import Path
           import zipfile, hashlib
           root=Path('.')
-          archive=Path('GameRoot_v0.3.0C2_Full_Cloud_Deploy.zip')
+          archive=Path('GameRoot_v0.3.0C3_Full_Cloud_Deploy.zip')
           paths=[]
           for dirname in ('app','public','docs'):
               paths.extend(p for p in (root/dirname).rglob('*') if p.is_file())
@@ -40,14 +40,14 @@ jobs:
               assert 'app/core.php' in names and 'app/schema.sql' in names
               assert 'var/config.php' not in names
           digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-          Path('GameRoot_v0.3.0C2_SHA256SUMS.txt').write_text(f'{digest}  {archive.name}\n')
+          Path('GameRoot_v0.3.0C3_SHA256SUMS.txt').write_text(f'{digest}  {archive.name}\n')
           print(f'Cloud package built from {len(paths)} files. SHA-256: {digest}')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: gameroot-v0.3.0C2-cloud-deployment
+          name: gameroot-v0.3.0C3-cloud-deployment
           path: |
-            GameRoot_v0.3.0C2_Full_Cloud_Deploy.zip
-            GameRoot_v0.3.0C2_SHA256SUMS.txt
+            GameRoot_v0.3.0C3_Full_Cloud_Deploy.zip
+            GameRoot_v0.3.0C3_SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
