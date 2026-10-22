@@ -34,10 +34,10 @@ function stripe_checkout_url(string $url): bool {
      && str_starts_with((string)($parts['path']??''),'/c/');
 }
 function checkout_site_origin(): string {
- $name=strtolower((string)($_SERVER['SERVER_NAME']??''));
- $isLocal=in_array($name,['localhost','127.0.0.1'],true) && in_array((string)($_SERVER['REMOTE_ADDR']??''),['127.0.0.1','::1'],true);
- if(!$isLocal && !valid_domain($name))throw new DomainException('Configure a valid portal server hostname.');
- return ($isLocal?'http':'https').'://'.$name.($isLocal?':'.(int)($_SERVER['SERVER_PORT']??80):'');
+ $origin=get_setting('portal_origin');
+ if($origin==='' || !preg_match('~^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$~iD',$origin))
+  throw new DomainException('Configure the portal HTTPS URL in owner integrations before Checkout.');
+ return $origin;
 }
 function stripe_test_checkout_request(string $apiKey,array $params,string $idempotencyKey,?callable $transport=null): array {
  if(!str_starts_with($apiKey,'sk_test_'))throw new DomainException('Checkout is test-mode only until live acceptance is certified.');
