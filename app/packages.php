@@ -96,13 +96,13 @@ function update_package(PDO $pdo,int $id,array $input): void {
     $v=validate_package($input);
     $pdo->beginTransaction();
     try {
-        $q=$pdo->prepare('SELECT p.id,d.delivery_type,d.billing_type FROM products p INNER JOIN package_details d ON d.product_id=p.id WHERE p.id=? FOR UPDATE');
+        $q=$pdo->prepare('SELECT p.id,d.delivery_type,d.billing_type,d.billing_interval FROM products p INNER JOIN package_details d ON d.product_id=p.id WHERE p.id=? FOR UPDATE');
         $q->execute([$id]);$old=$q->fetch();
         if (!$old) throw new DomainException('Package not found.');
         $q=$pdo->prepare('SELECT (SELECT COUNT(*) FROM orders WHERE product_id=?) + (SELECT COUNT(*) FROM entitlements WHERE product_id=?)');
         $q->execute([$id,$id]);
-        if ((int)$q->fetchColumn()>0 && ($old['delivery_type']!==$v['delivery_type'] || $old['billing_type']!==$v['billing_type'])) {
-            throw new DomainException('Delivery and ownership model cannot change after purchase. Create a new package instead.');
+        if ((int)$q->fetchColumn()>0 && ($old['delivery_type']!==$v['delivery_type'] || $old['billing_type']!==$v['billing_type'] || $old['billing_interval']!==$v['billing_interval'])) {
+            throw new DomainException('Delivery, ownership and subscription interval cannot change after purchase. Create a new package instead.');
         }
         $q=$pdo->prepare('UPDATE products SET sku=?,name=?,description=?,price_cents=? WHERE id=?');
         $q->execute([$v['sku'],$v['name'],$v['description'],$v['price_cents'],$id]);
