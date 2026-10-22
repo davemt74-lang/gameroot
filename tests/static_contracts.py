@@ -60,3 +60,15 @@ assert "verify_csrf()" not in stripe_webhook and "session_start" not in stripe_w
 assert "stripe_api" in (root/'app/portal.php').read_text()
 assert "stripe_webhook" in (root/'app/portal.php').read_text()
 assert "sk_live_" in stripe_webhook and "sk_test_" in stripe_webhook
+
+checkout=(root/'app/checkout.php').read_text()
+checkout_entry=(root/'public/checkout.php').read_text()
+assert "sk_test_" in checkout and "test-mode only" in checkout
+assert "stripe_checkout_url" in checkout and "checkout.stripe.com" in checkout
+assert "Idempotency-Key:" in checkout and "gameroot-order-" in checkout
+assert "FOR UPDATE" in checkout and "beginTransaction()" in checkout
+assert "payment_status" in checkout and "amount_total" in checkout and "livemode" in checkout
+assert "verify_csrf()" in checkout_entry and "require_user()" in checkout_entry
+assert "stripe_checkout_attempts" in (root/'app/schema.sql').read_text()
+assert "portal_origin" in (root/'public/admin.php').read_text()
+assert "checkout.session.completed" in (root/'public/stripe_webhook.php').read_text()

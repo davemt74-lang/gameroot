@@ -64,8 +64,9 @@ function get_setting(string $key): string {
     return (string)($q->fetchColumn() ?: '');
 }
 function save_setting(string $key, string $value): void {
-    if(!in_array($key,['tenant_domain'],true))throw new LogicException('Unknown setting.');
-    if($value!==''&&!valid_domain($value))throw new DomainException('Enter a valid base domain without http:// or slashes.');
+    if(!in_array($key,['tenant_domain','portal_origin'],true))throw new LogicException('Unknown setting.');
+    if($key==='tenant_domain' && $value!==''&&!valid_domain($value))throw new DomainException('Enter a valid base domain without http:// or slashes.');
+    if($key==='portal_origin' && $value!=='' && !preg_match('~^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$~iD',$value))throw new DomainException('Enter the portal HTTPS origin without a path or port.');
     $q=portal_pdo()->prepare('INSERT INTO portal_settings(name,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
     $q->execute([$key,$value]);
 }

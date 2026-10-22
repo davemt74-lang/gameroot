@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__).'/app/cpanel.php';
 require dirname(__DIR__).'/app/packages.php';
-require dirname(__DIR__).'/app/stripe.php';
+require dirname(__DIR__).'/app/checkout.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
@@ -61,3 +61,17 @@ $parsed=stripe_parse_event($eventPayload);
 test($parsed['id']==='evt_TEST12345678' && $parsed['livemode']===false,'Signed event fields parse');
 try{stripe_parse_event('{"type":"checkout.session.completed"}');throw new RuntimeException('Malformed event accepted');}
 catch(DomainException $e){test(true,'Malformed event rejected');}
+
+test(stripe_checkout_url('https://checkout.stripe.com/c/pay/cs_test_12345678'),'Trusted Stripe hosted URL accepted');
+foreach(['http://checkout.stripe.com/c/pay/test','https://checkout.stripe.com.evil.test/c/pay/test',
+ 'https://someone:secret@checkout.stripe.com/c/pay/test','https://checkout.stripe.com:444/c/pay/test',
+ 'https://evil.test/c/pay/test'] as $badUrl)test(!stripe_checkout_url($badUrl),'Unsafe checkout URL rejected');
+$checkoutParams=['mode'=>'payment'];
+$mock=function(array $params,string $idempotencyKey) use (&$checkoutParams): array {
+ $checkoutParams=$params;
+ return ['id'=>'cs_test_1234567890','url'=>'https://checkout.stripe.com/c/pay/cs_test_1234567890'];
+};
+$mockSession=stripe_test_checkout_request('sk_test_dummy123456789',$checkoutParams,'gameroot-order-42',$mock);
+test($mockSession['id']==='cs_test_1234567890','Mocked Stripe Checkout response validated');
+try{stripe_test_checkout_request('sk_live_dummy123456789',$checkoutParams,'gameroot-order-42',$mock);throw new RuntimeException('Live checkout accepted');}
+catch(DomainException $e){test(true,'Live-mode Stripe Checkout blocked');}

@@ -1,11 +1,15 @@
 <?php
 declare(strict_types=1);
-require __DIR__ . '/_init.php';require_once dirname(__DIR__).'/app/cpanel.php';require_once dirname(__DIR__).'/app/stripe.php';require_installed();$owner=require_admin();$error=null;
+require __DIR__ . '/_init.php';require_once dirname(__DIR__).'/app/cpanel.php';require_once dirname(__DIR__).'/app/checkout.php';require_installed();$owner=require_admin();$error=null;
 $tab=(string)($_GET['tab']??'overview');if(!in_array($tab,['overview','customers','requests','integrations','products'],true))$tab='overview';
 if($_SERVER['REQUEST_METHOD']==='POST'){
  portal_require_https();verify_csrf();
  try {
   $action=(string)($_POST['action']??'');
+  if($action==='upgrade_stripe_checkout'){
+   upgrade_stripe_checkout_schema(portal_pdo());
+   flash('success','Test-mode Stripe Checkout tables are ready. Live payments remain disabled.');redirect('/admin.php?tab=integrations');
+  }
   if($action==='upgrade_stripe'){
    upgrade_stripe_schema(portal_pdo());
    flash('success','Stripe event inbox is ready. No charges or subscriptions are enabled.');redirect('/admin.php?tab=integrations');
@@ -19,6 +23,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $result=cpanel_verify_connection();
    flash($result['ok']?'success':'error',$result['message']);
    redirect('/admin.php?tab=integrations');
+  }
+  if($action==='save_origin'){
+   save_setting('portal_origin',strtolower(trim((string)($_POST['portal_origin']??''))));
+   flash('success','Trusted portal HTTPS origin saved.');redirect('/admin.php?tab=integrations');
   }
   if($action==='save_domain'){
    save_setting('tenant_domain',strtolower(trim((string)($_POST['tenant_domain']??''))));
@@ -51,8 +59,10 @@ page_start('Admin control center',$owner);
 <?php elseif($tab==='products'):?><section class="panel"><span class="eyebrow">COMING IN NEXT RELEASES</span><h2>Purchases &amp; downloads</h2><p>The account/entitlement tables are ready for verified purchases, product catalogs, licenses, and release downloads. Checkout is deliberately disabled until a payment provider, verified webhooks, refunds, and entitlement issuance have been tested.</p><div class="notice"><strong>No live payments or product fulfillment yet.</strong><p>Customers cannot accidentally purchase, download, or gain a license from a pending order.</p></div></section>
 <?php else: $statuses=integration_statuses();$domain=get_setting('tenant_domain'); ?><section class="panel"><span class="eyebrow">OWNER-ONLY · SERVER-SIDE</span><h2>Integrations &amp; API keys</h2><p>Save tokens here rather than in source files or browser storage. Existing values are never displayed. Clearing an input leaves a stored key unchanged; choose Revoke to delete it.</p><div class="notice"><strong>Credentials are stored encrypted.</strong><p>Use Test connection to verify your saved cPanel token through a read-only UAPI call. Subdomain provisioning, AI API calls, and automatic installations remain disabled.</p></div>
 <form method="post" class="integration-domain form-stack"><?=csrf_input()?><input type="hidden" name="action" value="save_domain"><label>Game installation base domain<input name="tenant_domain" maxlength="253" placeholder="games.example.com" value="<?=e($domain)?>"><small>Enter a domain without HTTPS or a path; this is the namespace for future game subdomains.</small></label><button class="button button-outline" type="submit">Save domain</button></form>
+<form method="post" class="integration-domain form-stack"><?=csrf_input()?><input type="hidden" name="action" value="save_origin"><label>GameRoot portal HTTPS URL<input name="portal_origin" maxlength="253" placeholder="https://example.com" value="<?=e(get_setting('portal_origin'))?>"><small>Exact root-domain origin for Stripe checkout return links; no path or trailing slash.</small></label><button class="button button-outline" type="submit">Save portal URL</button></form>
 <div class="notice"><strong>Stripe webhook setup</strong><p>After saving your Stripe API key and signing secret, register <code>https://YOUR-DOMAIN/stripe_webhook.php</code> as an HTTPS snapshot-event endpoint in Stripe Workbench. This release only stores signed events for future processing; it cannot accept payments or grant licenses.</p></div>
 <?php if(!stripe_schema_ready($pdo)):?><form method="post" class="form-stack"><?=csrf_input()?><input type="hidden" name="action" value="upgrade_stripe"><button class="button button-outline" type="submit">Enable Stripe event storage</button></form><?php endif;?>
+<?php if(!stripe_checkout_schema_ready($pdo)):?><form method="post" class="form-stack"><?=csrf_input()?><input type="hidden" name="action" value="upgrade_stripe_checkout"><button class="button button-outline" type="submit">Enable test Checkout storage</button></form><?php endif;?>
 <div class="integration-grid"><?php foreach(integration_providers() as $provider=>$definition):$status=$statuses[$provider]??null;$metadata=$status?json_decode($status['metadata_json'],true):[];?><form method="post" class="integration-card form-stack"><?=csrf_input()?><input type="hidden" name="action" value="save_provider"><input type="hidden" name="provider" value="<?=e($provider)?>"><div class="integration-top"><h3><?=e($definition['label'])?></h3><span class="pill <?=$status?'pill-ready':'pill-muted'?>"><?=$status?'● Configured':'Not configured'?></span></div><p><?=e($definition['hint'])?></p>
 <?php if($provider==='hostgator'):?><label>cPanel hostname<input name="cpanel_host" autocomplete="off" placeholder="server.example.com" maxlength="253" value="<?=e($metadata['host']??'')?>"></label><label>cPanel username<input name="cpanel_user" autocomplete="off" maxlength="50" placeholder="hostingaccount" value="<?=e($metadata['username']??'')?>"></label><?php endif; ?>
 <label>New API credential<input type="password" name="credential" autocomplete="new-password" maxlength="8192" placeholder="<?= $status?'•••••••• (saved, leave blank to keep)':'Paste credential to store' ?>" aria-label="New <?=e($definition['label'])?> API credential"></label><div class="integration-actions"><button class="button button-compact" type="submit">Save / replace key</button><?php if($status):?><label class="revoke"><input type="checkbox" name="revoke" value="1"> Revoke saved key</label><?php endif;?></div><?php if($provider==='hostgator'&&$status):?><div class="integration-actions"><button class="button button-outline button-compact" type="submit" name="action" value="test_cpanel" formnovalidate>Test cPanel connection</button><small>Read-only authentication test · No hosting changes</small></div><?php endif;?></form><?php endforeach;?></div></section>
