@@ -62,12 +62,12 @@ function stripe_test_checkout_request(string $apiKey,array $params,string $idemp
  if(!is_string($id)||!preg_match('/^cs_test_[a-zA-Z0-9]{8,}$/D',$id)||!is_string($url)||!stripe_checkout_url($url))throw new RuntimeException('Stripe returned an invalid Checkout Session.');
  return ['id'=>$id,'url'=>$url];
 }
-function start_homeserver_checkout(PDO $pdo,int $userId,int $productId,?callable $transport=null): string {
+function start_homeserver_checkout(PDO $pdo,int $userId,int $productId,?callable $transport=null,?string $keyOverride=null,?string $originOverride=null): string {
  if($userId<1||$productId<1)throw new DomainException('Invalid checkout.');
  if(!stripe_checkout_schema_ready($pdo))throw new DomainException('Stripe Checkout database upgrade required.');
- $key=stripe_secret('stripe_api');
+ $key=$keyOverride??stripe_secret('stripe_api');
  if(!$key || !str_starts_with($key,'sk_test_'))throw new DomainException('Test-mode Stripe Checkout is not configured.');
- $origin=checkout_site_origin();
+ $origin=$originOverride??checkout_site_origin();
  $pdo->beginTransaction();
  try {
   $u=$pdo->prepare("SELECT id,email FROM users WHERE id=? AND status='active' FOR UPDATE");
