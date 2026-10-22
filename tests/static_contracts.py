@@ -40,3 +40,11 @@ assert "Cloud and subdomain hosting must use subscriptions" in packages
 assert "beginTransaction()" in packages and "rollBack()" in packages
 assert "ON DELETE CASCADE" in (root/'app/schema.sql').read_text()
 assert "checkout" not in package_ui.lower() or "disabled" in package_ui.lower()
+
+plans=(root/'public/plans.php').read_text()
+account=(root/'public/account.php').read_text()
+assert "require_user()" in plans and "verify_csrf()" in plans and "portal_require_https()" in plans
+assert "select_customer_package" in plans and "customer_package_selections" in account
+assert "No payment" in plans and "No charge" not in plans or "No payment" in plans
+assert "customer_package_selections" in (root/'app/schema.sql').read_text()
+assert "customer_package_selections" in packages
