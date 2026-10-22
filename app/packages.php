@@ -16,11 +16,14 @@ function package_table_sql(): string {
 }
 function package_schema_ready(PDO $pdo): bool {
     $q = $pdo->query("SHOW TABLES LIKE 'package_details'");
+    if ($q->fetchColumn() === false) return false;
+    $q = $pdo->query("SHOW TABLES LIKE 'customer_package_selections'");
     return $q->fetchColumn() !== false;
 }
 function upgrade_package_schema(PDO $pdo): void {
     // Fixed, reviewed DDL only. Re-running is safe; no product or account data is removed.
     $pdo->exec(package_table_sql());
+    $pdo->exec(package_selection_table_sql());
 }
 function validate_package(array $input): array {
     $sku = strtolower(trim((string)($input['sku'] ?? '')));
@@ -111,4 +114,35 @@ function update_package(PDO $pdo,int $id,array $input): void {
         if($e instanceof PDOException && $e->getCode()==='23000') throw new DomainException('That package SKU is already used.');
         throw $e;
     }
+}
+
+function package_selection_table_sql(): string {
+    return "CREATE TABLE IF NOT EXISTS customer_package_selections (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      product_id BIGINT UNSIGNED NOT NULL,
+      state VARCHAR(24) NOT NULL DEFAULT 'selected',
+      selected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY selection_unique (user_id,product_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      INDEX selection_user (user_id,selected_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+}
+function select_customer_package(PDO $pdo,int $userId,int $productId): void {
+    if ($userId<1 || $productId<1) throw new DomainException('Invalid package selection.');
+    if (!package_schema_ready($pdo)) throw new DomainException('Package catalog upgrade required.');
+    $q=$pdo->prepare('SELECT d.delivery_type FROM products p INNER JOIN package_details d ON d.product_id=p.id WHERE p.id=? AND p.active=1');
+    $q->execute([$productId]);$delivery=$q->fetchColumn();
+    if ($delivery===false) throw new DomainException('This package is not available.');
+    // A selection is not an order, entitlement, or subscription.
+    $q=$pdo->prepare("INSERT INTO customer_package_selections(user_id,product_id,state) VALUES (?,?,'selected') ON DUPLICATE KEY UPDATE state='selected'");
+    $q->execute([$userId,$productId]);
+}
+function customer_package_selections(PDO $pdo,int $userId): array {
+    if (!package_schema_ready($pdo)) return [];
+    $q=$pdo->prepare('SELECT p.id,p.sku,p.name,p.price_cents,p.active,d.delivery_type,d.billing_type,d.billing_interval,s.selected_at FROM customer_package_selections s INNER JOIN products p ON p.id=s.product_id INNER JOIN package_details d ON d.product_id=p.id WHERE s.user_id=? ORDER BY s.selected_at DESC');
+    $q->execute([$userId]);
+    return $q->fetchAll();
 }
