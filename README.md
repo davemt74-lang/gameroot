@@ -15,7 +15,7 @@ A PHP 8.1+ root-domain portal, separate from the [Lucky Game Hub game engine](ht
 
 ### Not yet implemented
 
-HostGator provisioning, automatic subdomains / SSL, paid checkout, email verification/recovery, shipping signed downloadable installers, and HomeServer/cloud license activation are intentionally not enabled. This release makes those future workflows possible without selling or provisioning anything prematurely.
+HostGator provisioning (a read-only cPanel connection test is available), automatic subdomains / SSL, paid checkout, email verification/recovery, shipping signed downloadable installers, and HomeServer/cloud license activation are intentionally not enabled. This release makes those future workflows possible without selling or provisioning anything prematurely.
 
 ### Deployment
 
@@ -25,3 +25,6 @@ Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). **Set the root domain document ro
 
 - `davemt74-lang/gameroot` — root-domain SaaS, accounts, purchases, integration configuration.
 - `davemt74-lang/lucky` — actual private game app, phone controller, video editor and HomeServer runtime.
+
+### v0.2.0A — cPanel verification
+After saving the cPanel hostname, account username and API token in Owner Admin → Integrations, select **Test cPanel connection**. GameRoot makes a read-only authenticated UAPI call over validated HTTPS port 2083. DNS results must be public IP addresses and are pinned for the request; redirects and invalid TLS certificates are rejected. Tokens and response bodies are never shown in the UI. Ensure PHP cURL is installed and your host permits outbound connections to port 2083. A successful check confirms API authentication only; it does not imply rights to provision subdomains, DNS, databases or SSL.
