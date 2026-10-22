@@ -81,3 +81,21 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
  INDEX stripe_pending (state, received_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS stripe_checkout_attempts (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ order_id BIGINT UNSIGNED NOT NULL UNIQUE,
+ user_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ idempotency_key VARCHAR(100) NOT NULL UNIQUE,
+ session_id VARCHAR(190) NULL UNIQUE,
+ checkout_url TEXT NULL,
+ state VARCHAR(20) NOT NULL DEFAULT 'creating',
+ expires_at TIMESTAMP NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY (order_id) REFERENCES orders(id),
+ FOREIGN KEY (user_id) REFERENCES users(id),
+ FOREIGN KEY (product_id) REFERENCES products(id),
+ INDEX checkout_user_product (user_id, product_id, state, expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
