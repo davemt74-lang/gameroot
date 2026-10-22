@@ -102,6 +102,8 @@ assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()
 assert_test(apply_paid_homeserver_session($pdo,$paidEvent,$paidSession),'Verified payment grants ownership');
 assert_test(apply_paid_homeserver_session($pdo,$paidEvent,$paidSession),'Duplicate paid event is safe');
 assert_test((int)$pdo->query('SELECT COUNT(*) FROM entitlements')->fetchColumn()===1,'Exactly one HomeServer entitlement granted');
+$pdo->prepare("UPDATE orders SET status='refunded' WHERE id=?")->execute([$orderId]);
+assert_test(!apply_paid_homeserver_session($pdo,$paidEvent,$paidSession),'Late webhook cannot regrant refunded order');
 try{start_homeserver_checkout($pdo,$buyerId,$id,$mockCheckout,'sk_test_example123456789','https://example.com');throw new RuntimeException('Repurchase accepted');}
 catch(DomainException $e){assert_test(true,'Already owned HomeServer cannot be purchased twice');}
 $pdo->prepare('DELETE FROM entitlements WHERE user_id=?')->execute([$buyerId]);
