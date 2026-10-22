@@ -75,7 +75,7 @@ function integration_providers(): array {
         'hostgator' => ['label'=>'HostGator / cPanel','hint'=>'Account-level cPanel API token. Provisioning remains disabled until connection and SSL certification.'],
         'openai' => ['label'=>'OpenAI','hint'=>'OpenAI API key for future server-side portal AI features.'],
         'anthropic' => ['label'=>'Claude (Anthropic)','hint'=>'Anthropic API key for future server-side Claude features.'],
-        'stripe_api' => ['label'=>'Stripe secret API key','hint'=>'Server-side sk_test_ or sk_live_ key. No checkout is enabled in this release.'],
+        'stripe_api' => ['label'=>'Stripe secret API key','hint'=>'Server-side sk_test_ or sk_live_ key. Test-mode HomeServer and hosting Checkout only; live charges are disabled.'],
         'stripe_webhook' => ['label'=>'Stripe webhook signing secret','hint'=>'whsec_ secret for the GameRoot webhook endpoint. Separate from the API key.'],
     ];
 }

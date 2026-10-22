@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__).'/app/cpanel.php';
 require dirname(__DIR__).'/app/packages.php';
-require dirname(__DIR__).'/app/checkout.php';
+require dirname(__DIR__).'/app/subscriptions.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
@@ -75,3 +75,18 @@ $mockSession=stripe_test_checkout_request('sk_test_dummy123456789',$checkoutPara
 test($mockSession['id']==='cs_test_1234567890','Mocked Stripe Checkout response validated');
 try{stripe_test_checkout_request('sk_live_dummy123456789',$checkoutParams,'gameroot-order-42',$mock);throw new RuntimeException('Live checkout accepted');}
 catch(DomainException $e){test(true,'Live-mode Stripe Checkout blocked');}
+
+
+test(hosting_interval('monthly')==='month' && hosting_interval('annual')==='year','Monthly/annual Stripe intervals mapped correctly');
+try{hosting_interval('weekly');throw new RuntimeException('Unknown billing interval accepted');}
+catch(DomainException $e){test(true,'Unsupported recurring interval rejected');}
+test(stripe_portal_url('https://billing.stripe.com/p/session/test_1234567890'),'Stripe-hosted billing portal URL recognized');
+foreach(['http://billing.stripe.com/p/session/test','https://billing.stripe.com.evil.test/p/session/test',
+ 'https://billing.stripe.com:8443/p/session/test','https://bad@billing.stripe.com/p/session/test',
+ 'https://billing.stripe.com.evil.test/path','https://billing.stripe.com/not-session'] as $bad)
+ test(!stripe_portal_url($bad),'Untrusted billing management redirect rejected');
+test(hosting_invoice_subscription_id(['parent'=>['subscription_details'=>['subscription'=>'sub_1234567890']]])==='sub_1234567890',
+ 'Current Stripe invoice subscription reference parsed');
+test(hosting_invoice_subscription_id(['subscription'=>'sub_1234567890'])==='sub_1234567890',
+ 'Legacy Stripe invoice subscription reference parsed');
+test(hosting_invoice_subscription_id(['subscription'=>'sub_wrong'])===null,'Invalid invoice subscription reference rejected');

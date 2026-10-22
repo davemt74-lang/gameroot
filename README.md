@@ -1,4 +1,4 @@
-# Lucky Game Hub GameRoot — Portal v0.1.0
+# Lucky Game Hub GameRoot — Portal v0.3.0C3
 
 A PHP 8.1+ root-domain portal, separate from the [Lucky Game Hub game engine](https://github.com/davemt74-lang/lucky).
 
@@ -15,7 +15,7 @@ A PHP 8.1+ root-domain portal, separate from the [Lucky Game Hub game engine](ht
 
 ### Not yet implemented
 
-HostGator provisioning (a read-only cPanel connection test is available), automatic subdomains / SSL, paid checkout, email verification/recovery, shipping signed downloadable installers, and HomeServer/cloud license activation are intentionally not enabled. This release makes those future workflows possible without selling or provisioning anything prematurely.
+HostGator provisioning (a read-only cPanel connection test is available), automatic subdomains / SSL, live paid checkout, email verification/recovery, shipping signed downloadable installers, and HomeServer/cloud license activation are intentionally not enabled. This release makes those future workflows possible without selling or provisioning anything prematurely.
 
 ### Deployment
 
@@ -46,3 +46,13 @@ Register the HTTPS snapshot webhook endpoint `https://YOUR-DOMAIN/stripe_webhook
 Owner Admin → Integrations requires a valid `sk_test_` API key, webhook signing secret, and an exact **portal HTTPS origin** (for example, `https://example.com`). Existing installations must enable **test Checkout storage**. Active, paid one-time HomeServer package selections then show **Stripe test checkout** in the customer's account.
 
 Checkout requests are CSRF-checked, serialized per buyer, idempotent per order, bounded to an hour-long Stripe-hosted session, and restricted to `checkout.stripe.com`. A customer cannot purchase a product they already own. An entitlement is only granted after Stripe delivers a signed, test-mode, `paid` Checkout event matching the persisted session, product ownership model, amount, currency, order ID, and user ID. Repeated paid events do not duplicate entitlements. A paid event received before local checkout reconciliation is retried via a non-2xx response. **Live Stripe keys, recurring subscriptions, and actual HomeServer download fulfillment remain disabled.** Complete Stripe sandbox acceptance before permitting live charges.
+
+
+### v0.3.0C3 — Stripe sandbox monthly / annual subdomain hosting
+- Owner creates separate active monthly and/or annual **Optional subdomain hosting** packages with exact USD prices. Cloud-only plans and permanent HomeServer purchases do not participate in hosting subscription Checkout.
+- Customer submits a subdomain installation request; owner must review it before any subscription checkout. Customer selects an optional hosting plan and chooses that reviewed installation at **Account → Packages awaiting checkout**. Only the account owner may start Checkout; requests, packages and Stripe URLs are validated server-side.
+- Stripe test-mode only: Stripe-hosted subscription Checkout uses monthly or annual recurring prices, immutable price snapshot, trusted HTTPS return URLs and an idempotency key. One installation can have only one hosting subscription at a time; repeat clicks reuse the same pending session. No live charges.
+- Only signed, test-mode paid Checkout and verified renewal invoices activate hosting authorization. Webhook handlers track paid invoices, failed renewals, subscription updates and deletions, and session expiry. Customer/subscription IDs are bound to the database ledger. Duplicate invoices are not duplicated; older events cannot restore service after a later failure, and canceled subscriptions cannot be revived by late invoices.
+- **Account → Subdomain & hosting subscriptions** shows active, past-due, canceled or pending billing status. Active/past-due subscribers may open a customer-bound **Stripe Billing Portal** test session to update payment details or cancel. Configure your Stripe Customer Portal before using that button.
+- Existing installations must click **Enable test hosting subscriptions** in Owner Admin → Integrations to create two idempotent tables. New installations include them.
+- A verified payment records **billing authorization only**, not DNS, SSL, customer hosting files or deployment; those remain a separately approved/provisioned section. Subscription cancellation does not revoke permanent HomeServer ownership. Sandbox acceptance with real test credentials and an actual site is required before any live mode release.

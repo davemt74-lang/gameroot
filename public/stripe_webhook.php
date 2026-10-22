@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
-// Stripe endpoint is deliberately stateless: no browser session or CSRF cookie.
-require dirname(__DIR__).'/app/checkout.php';
+// Stripe webhooks use the raw signed body, never a browser session or CSRF cookie.
+require dirname(__DIR__).'/app/subscriptions.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -25,20 +25,34 @@ try {
  if((!$isLive&&!$isTest) || $event['livemode']!==$isLive){
   http_response_code(400);echo '{"received":false}';exit;
  }
- stripe_record_event(portal_pdo(),$event);
- if(!$event['livemode'] && in_array($event['type'],['checkout.session.completed','checkout.session.async_payment_succeeded'],true)){
+ $pdo=portal_pdo();
+ $tracked=stripe_record_event($pdo,$event);
+ if(!$tracked){http_response_code(200);echo '{"received":true}';exit;}
+ // Test-only handlers. Live events are stored, not used for fulfillment.
+ if(!$event['livemode']){
   $full=json_decode($body,true,24,JSON_THROW_ON_ERROR);
-  $session=$full['data']['object']??null;
-  if(is_array($session) && ($session['mode']??null)==='payment' && ($session['payment_status']??null)==='paid'){
-   if(!apply_paid_homeserver_session(portal_pdo(),$event,$session)){
-    http_response_code(503);echo '{"received":false}';exit;
-   }
+  $object=$full['data']['object']??null;
+  if(!is_array($object)){http_response_code(400);echo '{"received":false}';exit;}
+  $type=$event['type'];
+  $applied=true;
+  if(in_array($type,['checkout.session.completed','checkout.session.async_payment_succeeded'],true)
+     && ($object['payment_status']??null)==='paid'){
+   if(($object['mode']??null)==='payment')$applied=apply_paid_homeserver_session($pdo,$event,$object);
+   elseif(($object['mode']??null)==='subscription')$applied=apply_paid_hosting_checkout($pdo,$event,$object);
+  } elseif($type==='checkout.session.expired' && ($object['mode']??null)==='subscription'){
+   $applied=apply_expired_hosting_checkout($pdo,$event,$object);
+  } elseif(in_array($type,['invoice.paid','invoice.payment_failed','customer.subscription.updated','customer.subscription.deleted'],true)){
+   $created=$full['created']??0;
+   $applied=is_int($created) && apply_hosting_lifecycle_event($pdo,$event,$object,$created);
   }
+  // Stripe retries unmatched paid, failed-invoice, or lifecycle events, including deliveries
+  // that raced ahead of checkout reconciliation. No access is granted on failure.
+  if(!$applied){http_response_code(503);echo '{"received":false}';exit;}
  }
  http_response_code(200);echo '{"received":true}';
-} catch(JsonException|DomainException $e) {
+} catch(JsonException|DomainException $e){
  http_response_code(400);echo '{"received":false}';
-} catch(Throwable $e) {
- error_log('Stripe webhook inbox unavailable: '.get_class($e));
+} catch(Throwable $e){
+ error_log('Stripe webhook processing unavailable: '.get_class($e));
  http_response_code(503);echo '{"received":false}';
 }
