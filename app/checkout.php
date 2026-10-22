@@ -124,6 +124,7 @@ function apply_paid_homeserver_session(PDO $pdo,array $event,array $session): bo
   $q=$pdo->prepare("SELECT a.session_id,a.user_id,a.product_id,o.total_cents,o.status,d.delivery_type,d.billing_type FROM stripe_checkout_attempts a INNER JOIN orders o ON o.id=a.order_id INNER JOIN package_details d ON d.product_id=a.product_id WHERE a.order_id=? FOR UPDATE");
   $q->execute([$orderId]);$row=$q->fetch();
   if(!$row || $row['session_id']!==$session['id'] || (int)$row['total_cents']!==$session['amount_total']
+    || !in_array($row['status'],['pending','paid'],true)
     || $row['delivery_type']!=='homeserver'||$row['billing_type']!=='one_time'
     || (string)$row['user_id']!==(string)($session['metadata']['user_id']??'')
     || (string)$orderId!==(string)($session['metadata']['order_id']??'')){$pdo->rollBack();return false;}
