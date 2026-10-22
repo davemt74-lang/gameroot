@@ -36,7 +36,7 @@ new_plan={'csrf':token(content),'action':'create_package','sku':'homeserver-http
  'billing_interval':'','price':'79.99','features':'Local games\\nPhone controls'}
 status,url,content,h=request('/packages.php',new_plan)
 check(status==200 and 'HomeServer HTTP Test' in content,'Owner creates draft package')
-match=re.search(r'/packages.php\\?edit=(\\d+)',content)
+match=re.search(r'/packages.php\?edit=(\d+)',content)
 check(match is not None,'Created package has editable ID')
 plan_id=match.group(1)
 status,url,content,h=request('/packages.php',{'csrf':token(content),'action':'toggle_package','package_id':plan_id,'enabled':'1'})
