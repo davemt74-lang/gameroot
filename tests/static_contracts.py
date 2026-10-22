@@ -29,3 +29,14 @@ assert 'FILTER_FLAG_NO_PRIV_RANGE' in cpanel and 'FILTER_FLAG_NO_RES_RANGE' in c
 assert '/execute/Variables/get_user_information' in cpanel
 assert "require_admin()" in admin
 assert "test_cpanel" in admin
+
+packages=(root/'app/packages.php').read_text()
+package_ui=(root/'public/packages.php').read_text()
+assert 'require_admin()' in package_ui and 'verify_csrf()' in package_ui
+assert 'portal_require_https()' in package_ui
+assert "billing_type" in packages and "one_time" in packages and "subscription" in packages
+assert "HomeServer ownership packages must be a one-time purchase" in packages
+assert "Cloud and subdomain hosting must use subscriptions" in packages
+assert "beginTransaction()" in packages and "rollBack()" in packages
+assert "ON DELETE CASCADE" in (root/'app/schema.sql').read_text()
+assert "checkout" not in package_ui.lower() or "disabled" in package_ui.lower()

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/app/cpanel.php';
+require dirname(__DIR__).'/app/packages.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
@@ -26,3 +27,21 @@ foreach ([[200,'{"status":1,"data":{}}',true],[200,'{"status":0,"errors":["inval
 foreach (['127.0.0.1','10.0.0.4','192.168.1.2','169.254.169.254','::1','fc00::5'] as $ip) {
     test(!filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE),'Private or reserved address rejected '.$ip);
 }
+
+$base=['sku'=>'homeserver-standard','name'=>'HomeServer Standard','description'=>'Local game engine',
+ 'delivery_type'=>'homeserver','billing_type'=>'one_time','billing_interval'=>'','price'=>'99.00','features'=>"Local play\nPhone controllers"];
+test(validate_package($base)['price_cents']===9900,'HomeServer one-time package validation');
+foreach ([
+ array_merge($base,['delivery_type'=>'homeserver','billing_type'=>'subscription','billing_interval'=>'monthly']),
+ array_merge($base,['delivery_type'=>'hosting_addon','billing_type'=>'one_time']),
+ array_merge($base,['delivery_type'=>'cloud','billing_type'=>'one_time']),
+ array_merge($base,['price'=>'-1']),
+ array_merge($base,['price'=>'1.999']),
+ array_merge($base,['sku'=>'../../escape']),
+ array_merge($base,['billing_interval'=>'annual']),
+] as $invalid) {
+ try {validate_package($invalid);throw new RuntimeException('Invalid package accepted');}
+ catch(DomainException $e){test(true,'Invalid package model rejected');}
+}
+$hosting=array_merge($base,['sku'=>'hosting-monthly','delivery_type'=>'hosting_addon','billing_type'=>'subscription','billing_interval'=>'monthly']);
+test(validate_package($hosting)['billing_type']==='subscription','Optional subdomain hosting subscription valid');

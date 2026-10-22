@@ -44,3 +44,15 @@ CREATE TABLE IF NOT EXISTS entitlements (
  FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (product_id) REFERENCES products(id),
  FOREIGN KEY (source_order_id) REFERENCES orders(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS package_details (
+ product_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+ delivery_type VARCHAR(16) NOT NULL,
+ billing_type VARCHAR(16) NOT NULL,
+ billing_interval VARCHAR(16) NULL,
+ currency CHAR(3) NOT NULL DEFAULT 'USD',
+ features_json TEXT NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
