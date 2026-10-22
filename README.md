@@ -1,9 +1,27 @@
-# Lucky Game Hub — GameRoot Cloud Portal
+# Lucky Game Hub GameRoot — Portal v0.1.0
 
-Separate root-domain SaaS and account portal for Lucky Game Hub. Game engines and customer installations remain in [davemt74-lang/lucky](https://github.com/davemt74-lang/lucky).
+A PHP 8.1+ root-domain portal, separate from the [Lucky Game Hub game engine](https://github.com/davemt74-lang/lucky).
 
-The portal owns public marketing, owner/admin controls, customer accounts, download entitlements, installation requests, and optional HostGator/cPanel, OpenAI and Claude integrations.
+### Built in v0.1.0
 
-**Security:** Never commit API keys or generated runtime configuration. Integration secrets are encrypted on the server; domain provisioning, payments, and installs remain disabled until separately certified.
+- Public responsive landing page, feature overview, and forthcoming hosted / HomeServer options.
+- Guided first-owner installer using a **new empty** MySQL/MariaDB database.
+- Customer self-registration, login/logout, password hashing, CSRF sessions, and login/registration rate limiting.
+- Private customer dashboard for pending hosted game subdomain requests.
+- Owner-only Admin sections: system overview, customers, request review, purchases/downloads roadmap, and integrations.
+- Encrypted-at-rest, masked, replace/revoke credentials for HostGator/cPanel, OpenAI and Anthropic (Claude), using PHP sodium. Credentials are **not** committed or displayed back in Admin.
+- Database scaffolding for products, orders and entitlements, with checkout and download fulfillment **disabled** until implemented and certified.
+- Automated PHP lint, security contract tests and MySQL lifecycle acceptance in GitHub Actions.
 
-Source under development. See deployment documentation in the first feature PR.
+### Not yet implemented
+
+HostGator provisioning, automatic subdomains / SSL, paid checkout, email verification/recovery, shipping signed downloadable installers, and HomeServer/cloud license activation are intentionally not enabled. This release makes those future workflows possible without selling or provisioning anything prematurely.
+
+### Deployment
+
+Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). **Set the root domain document root to `public/`.** Secrets and SQL code must not be published as static web files. Run `/install.php` to create the first owner account.
+
+### Repositories
+
+- `davemt74-lang/gameroot` — root-domain SaaS, accounts, purchases, integration configuration.
+- `davemt74-lang/lucky` — actual private game app, phone controller, video editor and HomeServer runtime.

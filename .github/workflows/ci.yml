@@ -1,0 +1,60 @@
+name: GameRoot portal certification
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  php-security:
+    name: PHP and secret handling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, pdo_mysql, openssl
+          coverage: none
+      - run: find app public tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: php tests/security.php
+      - run: python3 tests/static_contracts.py
+  mysql-e2e:
+    name: MariaDB / installer / account lifecycle
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: gameroot_test
+          MYSQL_USER: portal
+          MYSQL_PASSWORD: portalpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prootpass"
+          --health-interval=5s --health-timeout=4s --health-retries=20
+    env:
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: '3306'
+      TEST_DB_NAME: gameroot_test
+      TEST_DB_USER: portal
+      TEST_DB_PASSWORD: portalpass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, pdo_mysql, openssl
+          coverage: none
+      - run: php tests/mysql_integration.php
+      - name: Start local PHP portal
+        run: |
+          php -S 127.0.0.1:8188 -t public > /tmp/gameroot-php.log 2>&1 &
+          for i in $(seq 1 15); do if curl --silent --fail http://127.0.0.1:8188/install.php > /dev/null; then exit 0; fi; sleep 1; done
+          exit 1
+      - run: python3 tests/http_acceptance.py
+      - name: Never print credentials to build logs
+        if: failure()
+        run: echo 'Portal acceptance failed. No SQL dumps, session cookies, or config files are printed.'
