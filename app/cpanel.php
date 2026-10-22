@@ -32,7 +32,7 @@ function cpanel_verify_response(int $httpCode, string $body): array {
     return ['ok'=>true,'message'=>'Connection verified. Read-only cPanel API authentication succeeded.'];
 }
 
-function cpanel_verify_connection(callable $resolver = 'cpanel_public_addresses', ?callable $transport = null): array {
+function cpanel_verify_connection(?callable $resolver = null, ?callable $transport = null): array {
     $q = portal_pdo()->prepare('SELECT nonce,ciphertext,metadata_json FROM integrations WHERE provider=?');
     $q->execute(['hostgator']);
     $row = $q->fetch();
@@ -43,7 +43,7 @@ function cpanel_verify_connection(callable $resolver = 'cpanel_public_addresses'
     if (!valid_domain($host) || !preg_match('/^[a-zA-Z0-9_-]{1,50}$/D', $username)) {
         throw new DomainException('Saved cPanel connection settings are invalid.');
     }
-    $addresses = $resolver($host);
+    $addresses = ($resolver ?? 'cpanel_public_addresses')($host);
     if (!is_array($addresses) || $addresses === []) throw new DomainException('No safe cPanel server address was found.');
     // Validate injected resolver results too; never connect to an internal network address.
     foreach ($addresses as $ip) {
