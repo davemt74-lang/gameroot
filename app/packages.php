@@ -146,3 +146,10 @@ function customer_package_selections(PDO $pdo,int $userId): array {
     $q->execute([$userId]);
     return $q->fetchAll();
 }
+
+function remove_customer_package(PDO $pdo,int $userId,int $productId): void {
+    if ($userId<1 || $productId<1) throw new DomainException('Invalid package selection.');
+    if (!package_schema_ready($pdo)) throw new DomainException('Package catalog upgrade required.');
+    $q=$pdo->prepare('DELETE FROM customer_package_selections WHERE user_id=? AND product_id=?');
+    $q->execute([$userId,$productId]);
+}
