@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/app/cpanel.php';
+require dirname(__DIR__).'/app/packages.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
