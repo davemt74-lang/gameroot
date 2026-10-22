@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__).'/app/cpanel.php';
 require dirname(__DIR__).'/app/packages.php';
+require dirname(__DIR__).'/app/stripe.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
@@ -45,3 +46,18 @@ foreach ([
 }
 $hosting=array_merge($base,['sku'=>'hosting-monthly','delivery_type'=>'hosting_addon','billing_type'=>'subscription','billing_interval'=>'monthly']);
 test(validate_package($hosting)['billing_type']==='subscription','Optional subdomain hosting subscription valid');
+
+$webhookSecret='whsec_testsecret123456789';
+$eventPayload=json_encode(['id'=>'evt_TEST12345678','type'=>'checkout.session.completed','livemode'=>false,
+ 'data'=>['object'=>['id'=>'cs_test_12345678']]],JSON_THROW_ON_ERROR);
+$now=time();$signed=(string)$now.'.'.$eventPayload;
+$signature='t='.$now.',v1='.hash_hmac('sha256',$signed,$webhookSecret);
+test(stripe_verify_signature($eventPayload,$signature,$webhookSecret,$now),'Signed Stripe event accepted');
+test(!stripe_verify_signature($eventPayload.' ', $signature,$webhookSecret,$now),'Tampered Stripe payload rejected');
+test(!stripe_verify_signature($eventPayload,$signature,$webhookSecret,$now+301),'Stale Stripe signature rejected');
+test(!stripe_verify_signature($eventPayload,'t='.$now.',v1='.str_repeat('0',64),$webhookSecret,$now),'Invalid Stripe signature rejected');
+test(!stripe_verify_signature($eventPayload,'t='.$now.',v1='.hash_hmac('sha256',$signed,'whsec_wrong12345678'),$webhookSecret,$now),'Wrong signing secret rejected');
+$parsed=stripe_parse_event($eventPayload);
+test($parsed['id']==='evt_TEST12345678' && $parsed['livemode']===false,'Signed event fields parse');
+try{stripe_parse_event('{"type":"checkout.session.completed"}');throw new RuntimeException('Malformed event accepted');}
+catch(DomainException $e){test(true,'Malformed event rejected');}
