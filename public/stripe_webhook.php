@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 // Stripe endpoint is deliberately stateless: no browser session or CSRF cookie.
-require dirname(__DIR__).'/app/stripe.php';
+require dirname(__DIR__).'/app/checkout.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -26,6 +26,10 @@ try {
   http_response_code(400);echo '{"received":false}';exit;
  }
  stripe_record_event(portal_pdo(),$event);
+ if(!$event['livemode'] && in_array($event['type'],['checkout.session.completed','checkout.session.async_payment_succeeded'],true)){
+  $full=json_decode($body,true,24,JSON_THROW_ON_ERROR);
+  if(is_array($full['data']['object']??null))apply_paid_homeserver_session(portal_pdo(),$event,$full['data']['object']);
+ }
  http_response_code(200);echo '{"received":true}';
 } catch(JsonException|DomainException $e) {
  http_response_code(400);echo '{"received":false}';
