@@ -59,7 +59,8 @@ function portal_https(): bool {
 }
 function portal_require_https(): void {
     $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
-    $isLocal = (bool)preg_match('/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/', $host);
+    $isLocal = (bool)preg_match('/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/', $host)
+        && in_array((string)($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1'], true);
     if (!portal_https() && !$isLocal && PHP_SAPI !== 'cli') {
         http_response_code(403);
         exit('A secure HTTPS connection is required.');
