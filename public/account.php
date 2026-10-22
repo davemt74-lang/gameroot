@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require __DIR__ . '/_init.php';require_once dirname(__DIR__).'/app/packages.php';require_installed();$user=require_user();$error=null;
+require __DIR__ . '/_init.php';require_once dirname(__DIR__).'/app/checkout.php';require_installed();$user=require_user();$error=null;
 if($_SERVER['REQUEST_METHOD']==='POST'){
  portal_require_https();verify_csrf();
  try {
@@ -33,7 +33,8 @@ page_start('My account',$user);
 <section class="panel panel-wide"><div class="panel-heading"><div><span class="eyebrow">MY SELECTED PACKAGES</span><h2>Packages awaiting checkout</h2></div><a class="button button-outline button-compact" href="/plans.php">Browse packages</a></div>
 <p>Selecting a package saves your preference. It does not authorize a payment, subscription, or download.</p>
 <?php if(!$selectedPackages):empty_notice('No packages selected','Browse available packages to choose HomeServer or hosted plans.');else:foreach($selectedPackages as $item):?>
-<div class="request-row"><div><strong><?=e($item['name'])?></strong><small><?=e($item['delivery_type'])?> · <?=e(str_replace('_',' ',$item['billing_type']))?><?= $item['billing_interval']?' / '.e($item['billing_interval']):''?> · $<?=e(number_format((int)$item['price_cents']/100,2))?></small></div><div class="integration-actions"><span class="pill pill-muted"><?=$item['active']?'Selected':'Plan unavailable'?></span><form method="post" class="inline-control"><?=csrf_input()?><input type="hidden" name="action" value="remove_package_selection"><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><button class="button button-compact button-outline" type="submit">Remove</button></form></div></div>
+<div class="request-row"><div><strong><?=e($item['name'])?></strong><small><?=e($item['delivery_type'])?> · <?=e(str_replace('_',' ',$item['billing_type']))?><?= $item['billing_interval']?' / '.e($item['billing_interval']):''?> · $<?=e(number_format((int)$item['price_cents']/100,2))?></small></div><div class="integration-actions"><span class="pill pill-muted"><?=$item['active']?'Selected':'Plan unavailable'?></span><?php if($item['active']&&$item['delivery_type']==='homeserver'&&$item['billing_type']==='one_time'&&(int)$item['price_cents']>0):?><form method="post" action="/checkout.php" class="inline-control"><?=csrf_input()?><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><button class="button button-compact button-gold" type="submit">Stripe test checkout</button></form><?php endif;?>
+<form method="post" class="inline-control"><?=csrf_input()?><input type="hidden" name="action" value="remove_package_selection"><input type="hidden" name="package_id" value="<?=e($item['id'])?>"><button class="button button-compact button-outline" type="submit">Remove</button></form></div></div>
 <?php endforeach;endif;?></section>
 <section class="panel panel-wide"><div class="panel-heading"><div><span class="eyebrow">SOFTWARE LIBRARY</span><h2>Purchases &amp; downloads</h2></div><span class="pill pill-muted">Checkout coming soon</span></div>
 <?php if(!$entitlements):empty_notice('Your library is empty','Once products become available, purchased software and licensed downloads will appear here.');else:foreach($entitlements as $item):?><div class="request-row"><div><strong><?=e($item['name'])?></strong><small><?=e($item['sku'])?></small></div><span class="pill">Owned · Download pending</span></div><?php endforeach;endif;?></section></main><?php page_end(); ?>
