@@ -1,0 +1,53 @@
+name: GameRoot cloud deployment
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  cloud-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, pdo_mysql, openssl
+          coverage: none
+      - name: Validate PHP and source security
+        run: |
+          find app public -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/security.php
+          python3 tests/static_contracts.py
+      - name: Build separate root-domain Cloud ZIP
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, hashlib
+          root=Path('.')
+          archive=Path('GameRoot_v0.1.0_Full_Cloud_Deploy.zip')
+          paths=[]
+          for dirname in ('app','public','docs'):
+              paths.extend(p for p in (root/dirname).rglob('*') if p.is_file())
+          paths.extend([root/'README.md',root/'var/.gitkeep'])
+          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in sorted(paths,key=str):
+                  z.write(path,path.as_posix())
+          with zipfile.ZipFile(archive) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert 'public/index.php' in names and 'public/install.php' in names
+              assert 'app/core.php' in names and 'app/schema.sql' in names
+              assert 'var/config.php' not in names
+          digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+          Path('GameRoot_v0.1.0_SHA256SUMS.txt').write_text(f'{digest}  {archive.name}\n')
+          print(f'Cloud package built from {len(paths)} files. SHA-256: {digest}')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gameroot-v0.1.0-cloud-deployment
+          path: |
+            GameRoot_v0.1.0_Full_Cloud_Deploy.zip
+            GameRoot_v0.1.0_SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
