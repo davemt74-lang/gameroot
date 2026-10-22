@@ -63,7 +63,7 @@ assert "sk_live_" in stripe_webhook and "sk_test_" in stripe_webhook
 
 checkout=(root/'app/checkout.php').read_text()
 checkout_entry=(root/'public/checkout.php').read_text()
-assert "sk_test_" in checkout and "sk_live_" in checkout
+assert "sk_test_" in checkout and "test-mode only" in checkout
 assert "stripe_checkout_url" in checkout and "checkout.stripe.com" in checkout
 assert "Idempotency-Key:" in checkout and "gameroot-order-" in checkout
 assert "FOR UPDATE" in checkout and "beginTransaction()" in checkout
