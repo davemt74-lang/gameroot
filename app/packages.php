@@ -48,7 +48,7 @@ function validate_package(array $input): array {
     if ($billing!=='free' && $cents===0) throw new DomainException('Paid packages must have a positive price.');
     $lines=array_values(array_filter(array_map('trim',preg_split('/\r\n|\r|\n/',$features)?:[]),fn($s)=>$s!==''));
     if (count($lines)>30) throw new DomainException('Limit packages to 30 feature lines.');
-    foreach($lines as $line) if(mb_strlen($line)>160) throw new DomainException('Each feature must fit within 160 characters.');
+    foreach($lines as $line) if(strlen($line)>160) throw new DomainException('Each feature must fit within 160 characters.');
     return ['sku'=>$sku,'name'=>$name,'description'=>$description,'delivery_type'=>$delivery,
       'billing_type'=>$billing,'billing_interval'=>$billing==='subscription'?$interval:null,
       'price_cents'=>$cents,'features'=>$lines];
