@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__).'/app/portal.php';
+require dirname(__DIR__).'/app/cpanel.php';
 function test(bool $ok,string $name):void {if(!$ok)throw new RuntimeException($name);echo "PASS $name\n";}
 $key=base64_encode(random_bytes(32));$config=['secret_key'=>$key];
 $sealed=portal_encrypt('hg_test_secret_do_not_print',$config);
@@ -17,3 +17,12 @@ ob_start();require dirname(__DIR__).'/app/layout.php';
 $escaped=e('<img src=x onerror="run()">');
 test($escaped!=='<img src=x onerror="run()">'&&str_contains($escaped,'&lt;img'),'Output HTML escaping');
 ob_end_clean();
+
+foreach ([[200,'{"status":1,"data":{}}',true],[200,'{"status":0,"errors":["invalid"]}',false],[403,'Forbidden',false],[500,'error',false],[200,'<html>not json</html>',false],[200,'{"data":{}}',false]] as [$code,$body,$expected]) {
+    $result=cpanel_verify_response($code,$body);
+    test($result['ok']===$expected,'cPanel response verification '.$code.' '.substr(hash('sha256',$body),0,6));
+    test(!str_contains($result['message'],$body),'cPanel error body never exposed');
+}
+foreach (['127.0.0.1','10.0.0.4','192.168.1.2','169.254.169.254','::1','fc00::5'] as $ip) {
+    test(!filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE),'Private or reserved address rejected '.$ip);
+}
