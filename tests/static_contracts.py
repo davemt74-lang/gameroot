@@ -19,3 +19,13 @@ assert not (root/'var/config.php').exists()
 assert '/var/*' in (root/'.gitignore').read_text()
 assert not any((root/'public'/name).exists() for name in ('config.php','schema.sql','.env'))
 print('PASS Portal static security contracts')
+
+cpanel=(root/'app/cpanel.php').read_text()
+assert 'CURLOPT_SSL_VERIFYPEER => true' in cpanel
+assert 'CURLOPT_SSL_VERIFYHOST => 2' in cpanel
+assert 'CURLOPT_RESOLVE => $resolved' in cpanel
+assert 'CURLOPT_FOLLOWLOCATION => false' in cpanel
+assert 'FILTER_FLAG_NO_PRIV_RANGE' in cpanel and 'FILTER_FLAG_NO_RES_RANGE' in cpanel
+assert '/execute/Variables/get_user_information' in cpanel
+assert "require_admin()" in admin
+assert "test_cpanel" in admin
